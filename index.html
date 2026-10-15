@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campfire Prep — Pre-Calc 11</title>
+  <meta name="description" content="A 34-mark, 60-minute Pre-Calculus 11 practice test on radicals, rationalizing, radical equations and exponents — with a puppy and a campfire to keep alive." />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Shared SVG definitions (kept rendered so gradients work everywhere) -->
+  <svg class="defs-holder" aria-hidden="true" width="0" height="0">
+    <defs>
+      <linearGradient id="g-sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0b1022" />
+        <stop offset="1" stop-color="#25335c" />
+      </linearGradient>
+      <radialGradient id="g-glow">
+        <stop offset="0" stop-color="#ffb347" stop-opacity="0.75" />
+        <stop offset="0.45" stop-color="#ff7b29" stop-opacity="0.25" />
+        <stop offset="1" stop-color="#ff7b29" stop-opacity="0" />
+      </radialGradient>
+      <linearGradient id="g-ice" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#e8f8ff" stop-opacity="0.85" />
+        <stop offset="1" stop-color="#7cc8f2" stop-opacity="0.55" />
+      </linearGradient>
+      <symbol id="flame" viewBox="-30 -80 60 82" overflow="visible">
+        <path fill="#ff6a1f" d="M0,0 C-26,-6 -24,-40 -6,-76 C-6,-50 8,-46 10,-60 C28,-36 26,-6 0,0 Z" />
+        <path fill="#ffb02e" d="M0,0 C-16,-4 -15,-28 -3,-52 C-2,-34 7,-32 8,-42 C18,-26 16,-4 0,0 Z" />
+        <path fill="#fff1a8" d="M0,0 C-8,-2 -8,-14 -1,-28 C0,-18 5,-17 5,-22 C10,-14 9,-2 0,0 Z" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- The campfire scene (moved between screens by JS) -->
+  <template id="scene-template">
+    <svg class="scene" viewBox="0 0 320 280" role="img" aria-label="A puppy in a scarf sitting by a campfire next to a tent">
+      <rect width="320" height="280" fill="url(#g-sky)" />
+      <g class="stars">
+        <circle cx="24" cy="22" r="1.2" /><circle cx="70" cy="48" r="0.9" /><circle cx="118" cy="18" r="1.4" />
+        <circle cx="160" cy="58" r="0.8" /><circle cx="196" cy="26" r="1.1" /><circle cx="300" cy="70" r="1" />
+        <circle cx="40" cy="86" r="0.8" /><circle cx="138" cy="94" r="0.9" /><circle cx="226" cy="84" r="1.2" />
+      </g>
+      <circle cx="268" cy="38" r="15" fill="#f6efd2" />
+      <circle cx="274" cy="34" r="13" fill="#152043" opacity="0.92" />
+      <!-- trees -->
+      <g fill="#0e1a2e">
+        <polygon points="250,206 272,120 294,206" /><polygon points="276,210 300,104 324,210" />
+        <polygon points="-8,206 14,128 36,206" />
+      </g>
+      <!-- ground -->
+      <path d="M0,204 Q80,196 160,202 T320,200 V280 H0 Z" fill="#2c3a4f" class="ground" />
+      <path d="M0,204 Q80,196 160,202 T320,200 V208 Q240,212 160,208 T0,212 Z" fill="#e9f1f7" opacity="0.55" class="snowline" />
+      <!-- glow -->
+      <circle class="glow" cx="224" cy="232" r="120" fill="url(#g-glow)" />
+      <!-- tent -->
+      <g class="tent">
+        <polygon points="22,214 84,118 146,214" fill="#c4553a" />
+        <polygon points="84,118 146,214 128,214" fill="#9e3f2a" />
+        <polygon points="84,142 66,214 102,214" fill="#3b1f1a" />
+        <line x1="84" y1="118" x2="84" y2="108" stroke="#7a5a3a" stroke-width="3" stroke-linecap="round" />
+        <line x1="22" y1="214" x2="10" y2="222" stroke="#bfb3a3" stroke-width="1.5" />
+        <line x1="146" y1="214" x2="158" y2="222" stroke="#bfb3a3" stroke-width="1.5" />
+      </g>
+      <!-- campfire -->
+      <g class="campfire">
+        <g fill="#6f7686">
+          <ellipse cx="196" cy="246" rx="8" ry="5" /><ellipse cx="252" cy="246" rx="8" ry="5" />
+          <ellipse cx="208" cy="252" rx="9" ry="5" /><ellipse cx="240" cy="252" rx="9" ry="5" /><ellipse cx="224" cy="255" rx="9" ry="5" />
+        </g>
+        <g class="flame-wrap" transform="translate(224 244)">
+          <g class="flames">
+            <use href="#flame" x="-30" y="-80" width="60" height="82" class="f1" />
+            <use href="#flame" x="-38" y="-62" width="44" height="62" class="f2" />
+            <use href="#flame" x="-6" y="-58" width="42" height="58" class="f3" />
+          </g>
+        </g>
+        <g stroke-linecap="round">
+          <line x1="200" y1="250" x2="248" y2="236" stroke="#6b3f22" stroke-width="9" />
+          <line x1="200" y1="236" x2="248" y2="250" stroke="#7d4a28" stroke-width="9" />
+        </g>
+        <g class="embers" fill="#ffcf6b">
+          <circle cx="214" cy="226" r="1.3" /><circle cx="230" cy="220" r="1.1" /><circle cx="222" cy="214" r="1.2" />
+        </g>
+        <g class="smoke" fill="#9aa3b5">
+          <circle cx="222" cy="226" r="6" /><circle cx="228" cy="214" r="8" /><circle cx="220" cy="200" r="10" />
+        </g>
+      </g>
+      <!-- puppy (nested groups so each animation has its own transform) -->
+      <g class="puppy" transform="translate(126 252)">
+        <ellipse class="pup-shadow" cx="0" cy="1" rx="30" ry="4" fill="#000" opacity="0.25" />
+        <g class="pup-hop"><g class="pup-breathe"><g class="puppy-body">
+          <path class="tail" d="M18,-14 q24,-4 26,-28" fill="none" stroke="#c98f55" stroke-width="7" stroke-linecap="round" />
+          <ellipse cx="-17" cy="-7" rx="10" ry="7" fill="#c98f55" />
+          <ellipse cx="17" cy="-7" rx="10" ry="7" fill="#c98f55" />
+          <ellipse cx="0" cy="-24" rx="22" ry="24" fill="#d9a066" />
+          <ellipse cx="0" cy="-20" rx="12" ry="15" fill="#f3dcb8" />
+          <rect x="-12" y="-16" width="8" height="16" rx="4" fill="#d9a066" />
+          <rect class="paw-r" x="4" y="-16" width="8" height="16" rx="4" fill="#d9a066" />
+          <ellipse cx="-8" cy="-1" rx="5" ry="3" fill="#f3dcb8" />
+          <ellipse cx="8" cy="-1" rx="5" ry="3" fill="#f3dcb8" />
+          <rect x="-17" y="-48" width="34" height="8" rx="4" fill="#d6453a" />
+          <path class="scarf-tail" d="M8,-42 l6,14 l-7,1 z" fill="#b5352c" />
+          <g class="head" transform="translate(0 -64)"><g class="head-tilt">
+            <g class="ear-wrap ear-wrap-l"><ellipse class="ear ear-l" cx="-18" cy="0" rx="7" ry="13" fill="#8b5a2b" transform="rotate(18 -18 -8)" /></g>
+            <g class="ear-wrap ear-wrap-r"><ellipse class="ear ear-r" cx="18" cy="0" rx="7" ry="13" fill="#8b5a2b" transform="rotate(-18 18 -8)" /></g>
+            <circle r="20" fill="#d9a066" />
+            <ellipse cx="0" cy="8" rx="11" ry="8" fill="#f3dcb8" />
+            <circle class="cheek" cx="-12" cy="6" r="3.2" fill="#f08a8a" opacity="0.45" />
+            <circle class="cheek" cx="12" cy="6" r="3.2" fill="#f08a8a" opacity="0.45" />
+            <g class="eyes-look"><g class="eyes" fill="#2b1d14">
+              <circle cx="-7" cy="-4" r="2.7" /><circle cx="7" cy="-4" r="2.7" />
+              <circle cx="-6.2" cy="-5" r="0.9" fill="#fff" /><circle cx="7.8" cy="-5" r="0.9" fill="#fff" />
+            </g></g>
+            <path class="eyes-closed" d="M-10,-4 q3,3 6,0 M4,-4 q3,3 6,0" fill="none" stroke="#2b1d14" stroke-width="1.6" stroke-linecap="round" />
+            <ellipse cx="0" cy="4" rx="4" ry="3" fill="#2b1d14" />
+            <path d="M-4,9 q4,4 4,0 q0,4 4,0" fill="none" stroke="#2b1d14" stroke-width="1.2" stroke-linecap="round" />
+            <ellipse class="tongue" cx="2" cy="15" rx="3.5" ry="5" fill="#e86a7a" />
+            <path class="sweat" d="M17,-14 q4,6 0,9 q-4,-3 0,-9 z" fill="#8fd3ff" />
+            <path class="frost-brow" d="M-12,-11 l5,1 M12,-11 l-5,1" stroke="#cdeeff" stroke-width="1.6" stroke-linecap="round" />
+          </g></g>
+        </g></g></g>
+        <g class="breath" fill="#ffffff"><circle cx="10" cy="-52" r="3" /><circle cx="14" cy="-56" r="4" /><circle cx="19" cy="-61" r="5" /></g>
+        <g class="zzz" fill="#cfe3ff" font-family="Nunito, sans-serif" font-weight="800"><text x="16" y="-86" font-size="10">z</text><text x="24" y="-96" font-size="13">z</text><text x="34" y="-108" font-size="16">Z</text></g>
+        <path class="heart" d="M0,-96 c-4,-6 -12,-2 -8,4 l8,7 l8,-7 c4,-6 -4,-10 -8,-4 z" fill="#ff7a8a" />
+        <g class="sparkle" fill="#ffd36b"><path d="M-26,-80 l2,-6 l2,6 l6,2 l-6,2 l-2,6 l-2,-6 l-6,-2 z" /><path d="M28,-74 l1.5,-4 l1.5,4 l4,1.5 l-4,1.5 l-1.5,4 l-1.5,-4 l-4,-1.5 z" /></g>
+      </g>
+      <!-- ice cube (frozen) -->
+      <g class="ice">
+        <rect x="88" y="160" width="76" height="98" rx="9" fill="url(#g-ice)" stroke="#f2fbff" stroke-width="2" />
+        <path d="M96,172 l10,-6 M98,186 l22,-14 M146,240 l10,-8" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" opacity="0.8" />
+      </g>
+      <!-- fire everywhere (burning) -->
+      <g class="burn-fx">
+        <use href="#flame" x="50" y="140" width="56" height="78" />
+        <use href="#flame" x="78" y="110" width="64" height="100" />
+        <use href="#flame" x="104" y="150" width="48" height="66" />
+        <use href="#flame" x="98" y="176" width="58" height="80" />
+        <use href="#flame" x="128" y="190" width="44" height="62" />
+      </g>
+      <!-- weather overlays -->
+      <rect class="cold-overlay" width="320" height="280" fill="#9fd8ff" />
+      <rect class="hot-overlay" width="320" height="280" fill="#ff5a1f" />
+      <g class="snow" fill="#ffffff">
+        <circle cx="30" cy="0" r="1.8" /><circle cx="90" cy="0" r="1.4" /><circle cx="150" cy="0" r="2" />
+        <circle cx="210" cy="0" r="1.5" /><circle cx="270" cy="0" r="1.8" /><circle cx="60" cy="0" r="1.2" />
+        <circle cx="180" cy="0" r="1.3" /><circle cx="300" cy="0" r="1.6" />
+      </g>
+    </svg>
+  </template>
+
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="#" id="brand-link" aria-label="Campfire Prep home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="-30 -80 60 82" width="22" height="30"><use href="#flame" x="-30" y="-80" width="60" height="82" /></svg>
+        </span>
+        <span>
+          <span class="brand-name">Campfire Prep</span>
+          <span class="brand-sub">Pre-Calc 11 · Radicals Unit Test Practice</span>
+        </span>
+      </a>
+      <div class="topbar-test" id="topbar-test" hidden>
+        <div class="tb-progress">
+          <div class="tb-progress-text"><span id="q-counter">Written Response · Q1 of 5</span><span id="answered-counter">0/20 answered</span></div>
+          <div class="seg-bar" id="seg-bar" aria-hidden="true"></div>
+        </div>
+        <div class="timer" id="timer" aria-live="off"><span class="timer-label">Time left</span><span class="timer-value" id="timer-value">60:00</span><span class="drain-badge" id="drain-badge" hidden>×2</span></div>
+        <button class="btn btn-secondary btn-pause" id="btn-pause" type="button" title="Pause (P)">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span class="btn-label">Pause</span>
+        </button>
+        <button class="btn btn-ghost" id="btn-quit" type="button">Quit</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ───────── TITLE ───────── -->
+      <section class="screen screen-start" id="screen-start">
+        <div class="start-hero">
+          <div class="hero-scene" id="hero-scene"></div>
+          <div class="hero-copy">
+            <p class="eyebrow">Pre-Calc 11 · Radicals unit test practice</p>
+            <h1>Keep the fire going.<br />Keep your head cool.</h1>
+            <p class="lead">A 34-mark, 60-minute practice test laid out like the real unit test. While you work, your puppy needs you: feed the fire, but not too much.</p>
+            <div class="start-actions">
+              <button class="btn btn-primary btn-lg" id="btn-enter" type="button">Enter Basecamp</button>
+              <button class="btn btn-secondary btn-lg" id="btn-tour" type="button">How to play</button>
+            </div>
+            <p class="muted small" id="title-note">First time? Entering Basecamp starts a short guided tour. You can skip it.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────── BASECAMP ───────── -->
+      <section class="screen screen-home" id="screen-home" hidden>
+        <div class="home-head">
+          <div>
+            <p class="eyebrow">Basecamp</p>
+            <h1 id="home-greeting">Welcome to Basecamp.</h1>
+            <p class="lead" id="home-sub"></p>
+          </div>
+          <div class="home-head-actions">
+            <button class="btn btn-ghost" id="btn-tour-2" type="button">How to play</button>
+          </div>
+        </div>
+
+        <div class="home-top">
+          <div class="card launch-card">
+            <div id="resume-box"></div>
+            <h2>Next practice test</h2>
+            <div class="setup-summary" id="setup-summary"></div>
+            <button class="btn btn-primary btn-lg btn-block" id="btn-create" type="button">Create test</button>
+            <button class="btn btn-link quick-start" id="btn-start" type="button">Quick start with these settings</button>
+          </div>
+
+          <div class="card stats-card">
+            <div class="card-head progress-head">
+              <h2>Your progress</h2>
+              <div class="segmented small-seg level-seg" role="tablist" aria-label="Show progress for" id="level-pick">
+                <button type="button" role="tab" data-level="classmate">Classmate's</button>
+                <button type="button" role="tab" data-level="normal">Normal</button>
+                <button type="button" role="tab" data-level="challenge">Challenge</button>
+              </div>
+            </div>
+            <div class="stat-tiles" id="home-stats"></div>
+            <div class="trend" id="trend"></div>
+          </div>
+        </div>
+
+        <div class="card group-card" id="group-card">
+          <div class="group-intro">
+            <h2>Study together</h2>
+            <p class="muted">Make a group test and share the code. Everyone gets the <b>same questions in the same order</b>, so you can talk them through on a call. Set a start time and everyone's clock runs together. Afterwards, swap result codes to see a group scoreboard.</p>
+          </div>
+          <div class="group-actions">
+            <div class="group-box">
+              <h3>Host</h3>
+              <button class="btn btn-primary btn-block" id="btn-group-create" type="button">Create a group test</button>
+            </div>
+            <form class="group-box" id="join-form" autocomplete="off">
+              <h3><label for="join-code">Join with a code</label></h3>
+              <div class="join-row">
+                <input class="text-input code-input" id="join-code" type="text" placeholder="XXXX-XXXX-XXXX" maxlength="16" spellcheck="false" autocapitalize="characters" />
+                <button class="btn btn-secondary" type="submit">Join</button>
+              </div>
+              <p class="form-error" id="join-error" role="alert"></p>
+            </form>
+          </div>
+        </div>
+
+        <div class="home-mid">
+          <div class="card focus-card">
+            <h2>What to work on</h2>
+            <div id="focus"></div>
+          </div>
+          <div class="card habits-card">
+            <h2>Where marks slip away</h2>
+            <div id="habits"></div>
+          </div>
+        </div>
+
+        <div class="card history-card">
+          <div class="card-head"><h2>Test history</h2><span class="muted small">Select a test to see its full review.</span></div>
+          <div id="history-list"></div>
+        </div>
+
+        <div class="card mastery-card">
+          <div class="card-head"><h2>Topic mastery</h2><span class="muted small">Recent tests count more.</span></div>
+          <div id="mastery"></div>
+        </div>
+      </section>
+
+      <!-- ───────── GROUP LOBBY ───────── -->
+      <section class="screen screen-lobby" id="screen-lobby" hidden>
+        <div class="lobby">
+          <div class="lobby-scene" id="lobby-scene"></div>
+          <div class="lobby-main">
+            <p class="eyebrow">Group test</p>
+            <h1 id="lobby-title">Waiting for the group</h1>
+            <p class="lead" id="lobby-sub"></p>
+            <div class="share-box">
+              <span class="share-label">Group code</span>
+              <div class="share-code" id="lobby-code">XXXX-XXXX-XXXX</div>
+              <div class="share-actions">
+                <button class="btn btn-secondary" id="btn-copy-code" type="button">Copy code</button>
+                <button class="btn btn-secondary" id="btn-copy-link" type="button">Copy invite link</button>
+              </div>
+              <input class="text-input share-link" id="lobby-link" type="text" readonly aria-label="Invite link" />
+              <p class="copy-note" id="copy-note" role="status"></p>
+            </div>
+            <div class="field">
+              <span class="field-label" id="lobby-buddy-label">Your campfire</span>
+              <div class="segmented" role="radiogroup" aria-labelledby="lobby-buddy-label" id="lobby-buddy">
+                <button type="button" role="radio" data-mode="chill">Chill</button>
+                <button type="button" role="radio" data-mode="normal">Normal</button>
+                <button type="button" role="radio" data-mode="off">No campfire</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="lobby-name">Your name (shown on the group scoreboard)</label>
+              <input class="text-input" id="lobby-name" type="text" maxlength="18" placeholder="e.g. Aubrey" />
+            </div>
+            <div class="lobby-countdown" id="lobby-countdown" hidden>
+              <span class="cd-label">Starts in</span>
+              <span class="cd-value" id="cd-value">5:00</span>
+              <span class="cd-at" id="cd-at"></span>
+            </div>
+            <div class="lobby-actions">
+              <button class="btn btn-primary btn-lg" id="btn-lobby-start" type="button">Start test</button>
+              <button class="btn btn-ghost" id="btn-lobby-leave" type="button">Leave group</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────── TEST ───────── -->
+      <section class="screen screen-test" id="screen-test" hidden>
+        <div class="test-layout">
+          <aside class="buddy-panel" aria-label="Campfire buddy">
+            <div class="scene-slot" id="test-scene"></div>
+            <p class="buddy-status" id="buddy-status" role="status">Your puppy is cozy.</p>
+          </aside>
+
+          <div class="test-main">
+            <article class="paper" id="question-card">
+              <div class="paper-head">
+                <span class="paper-tags"><span class="q-label" id="q-label">Q1</span><span class="topic-tag" id="q-topic">Topic</span></span>
+                <button class="flag-btn" id="btn-flag" type="button" aria-pressed="false">⚑ Flag</button>
+              </div>
+              <div id="q-body"></div>
+            </article>
+
+            <div class="q-nav">
+              <button class="btn btn-secondary" id="btn-prev" type="button">← Previous</button>
+              <button class="btn btn-secondary" id="btn-next" type="button">Next →</button>
+            </div>
+
+            <div class="card navigator">
+              <div class="navigator-head">
+                <span>Questions</span>
+                <span class="legend"><i class="dot dot-answered"></i>answered <i class="dot dot-partial"></i>partly <i class="dot dot-flagged"></i>flagged</span>
+              </div>
+              <div class="nav-grid" id="nav-grid"></div>
+              <button class="btn btn-primary btn-block" id="btn-submit" type="button">Submit test</button>
+            </div>
+            <p class="kbd-hint">Shortcuts (when not typing): <kbd>1</kbd>–<kbd>4</kbd> pick a choice · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>F</kbd> add log · <kbd>N</kbd> scratchpad · <kbd>P</kbd> pause</p>
+          </div>
+
+          <aside class="heat-panel" aria-label="Fire heat">
+            <span class="heat-label heat-label-hot" aria-hidden="true">🔥 Too hot</span>
+            <div class="gauge" id="gauge" role="meter" aria-label="Fire heat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
+              <div class="gauge-zone zone-cozy"></div>
+              <div class="gauge-thumb" id="gauge-thumb"></div>
+              <div class="gauge-pending" id="gauge-pending"></div>
+            </div>
+            <span class="heat-label heat-label-cold" aria-hidden="true">❄️ Too cold</span>
+            <button class="btn fuel-btn" id="btn-fuel" type="button">
+              <span class="fuel-icon" aria-hidden="true">🪵</span>
+              <span class="fuel-text" id="fuel-text">Add log</span>
+            </button>
+            <button class="btn btn-link fire-off" id="btn-fire-off" type="button" title="Stop the minigame and just do the test">Turn off campfire</button>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ───────── RESULTS ───────── -->
+      <section class="screen screen-results" id="screen-results" hidden>
+        <div class="results-head">
+          <div>
+            <p class="eyebrow" id="results-eyebrow">Results</p>
+            <h1 id="results-title">Nice work.</h1>
+            <p class="lead" id="results-date"></p>
+          </div>
+          <div class="results-actions">
+            <button class="btn btn-primary" id="btn-again" type="button">New test</button>
+            <button class="btn btn-secondary" id="btn-home" type="button">Back to Basecamp</button>
+          </div>
+        </div>
+
+        <div class="best-banner" id="best-banner"></div>
+
+        <div class="stat-grid" id="stat-grid"></div>
+
+        <div class="card group-board" id="group-board" hidden></div>
+
+        <div class="results-grid">
+          <div class="card">
+            <h2>By section</h2>
+            <div id="topic-breakdown"></div>
+          </div>
+          <div class="card">
+            <h2>Campfire report</h2>
+            <div id="buddy-report"></div>
+          </div>
+        </div>
+
+        <div class="card review-card">
+          <div class="review-head">
+            <h2>Review</h2>
+            <div class="segmented" id="review-filter" role="tablist" aria-label="Filter questions">
+              <button type="button" data-filter="all" role="tab">All</button>
+              <button type="button" data-filter="wrong" role="tab">Lost marks</button>
+              <button type="button" data-filter="flagged" role="tab">Flagged</button>
+              <button type="button" data-filter="slow" role="tab">Slowest</button>
+            </div>
+          </div>
+          <div id="review-list"></div>
+        </div>
+      </section>
+    </main>
+
+
+    <!-- Floating scratchpad (test screen only) -->
+    <section class="scratchpad" id="scratchpad" hidden aria-label="Scratchpad">
+      <div class="sp-window">
+        <header class="sp-head" title="Drag to move · double-click to expand">
+          <span class="sp-title"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Scratchpad <span class="sp-page"></span></span>
+          <span class="sp-win">
+            <button type="button" data-win="big" title="Expand / restore" aria-label="Expand scratchpad"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+            <button type="button" data-win="min" title="Minimize (N)" aria-label="Minimize scratchpad"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+          </span>
+        </header>
+        <div class="sp-tools"></div>
+        <div class="sp-surface">
+          <canvas class="sp-canvas"></canvas>
+          <p class="sp-hint">Hold the left mouse button to write. Each question gets its own page, and your scratch work shows up in the review.</p>
+        </div>
+        <div class="sp-resize" title="Drag to resize" aria-hidden="true"></div>
+      </div>
+      <button class="sp-mini" type="button" title="Open scratchpad (N)">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Scratchpad <span class="sp-mini-page"></span><i class="sp-ink-dot" aria-hidden="true"></i>
+      </button>
+    </section>
+    <footer class="footer">Made for Pre-Calc 11 study sessions. Progress is saved in this browser only.</footer>
+  </div>
+
+  <!-- Pause lock: covers the whole test so nothing can be read or answered -->
+  <div class="pause-overlay" id="pause-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="pause-card">
+      <div class="pause-scene" id="pause-scene"></div>
+      <p class="eyebrow">Test paused</p>
+      <h2 id="pause-title">The clock is stopped.</h2>
+      <p class="pause-time"><span id="pause-time">60:00</span> left</p>
+      <p class="muted" id="pause-detail">Your answers, scratch work and campfire are saved. You can close this tab and come back later — the timer stays frozen until you resume.</p>
+      <div class="pause-actions">
+        <button class="btn btn-primary btn-lg" id="btn-unpause" type="button">Resume test</button>
+        <button class="btn btn-secondary" id="btn-pause-home" type="button">Back to Basecamp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game over (Puppy can lose) -->
+  <div class="gameover" id="gameover" hidden role="dialog" aria-modal="true" aria-labelledby="go-title">
+    <div class="gameover-card">
+      <div class="go-icon" id="go-icon" aria-hidden="true">🔥</div>
+      <p class="eyebrow">Game over</p>
+      <h2 id="go-title">The camp burned down.</h2>
+      <p class="muted" id="go-text">Math comes first: your answers are safe and your mark isn't affected. The clock is paused while you decide.</p>
+      <div class="go-actions">
+        <button class="btn btn-primary btn-lg" id="go-revive" type="button">Keep going with the test</button>
+        <button class="btn btn-secondary" id="go-off" type="button">Turn off the campfire and keep going</button>
+        <button class="btn btn-ghost" id="go-end" type="button">End test and see results</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guided tour -->
+  <div class="tour" id="tour" hidden>
+    <div class="tour-block" id="tour-block"></div>
+    <div class="tour-spot" id="tour-spot"></div>
+    <div class="tour-card" id="tour-card" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-text">
+      <div class="tour-progress" id="tour-progress"></div>
+      <h3 id="tour-title"></h3>
+      <div id="tour-text"></div>
+      <div class="tour-actions">
+        <button class="btn btn-link" id="tour-skip" type="button">Skip tour</button>
+        <span class="tour-nav">
+          <button class="btn btn-secondary" id="tour-back" type="button">Back</button>
+          <button class="btn btn-primary" id="tour-next" type="button">Next</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <dialog class="dialog setup-dialog" id="setup-dialog" aria-labelledby="setup-title">
+    <form method="dialog" id="setup-form">
+      <h2 id="setup-title">Create test</h2>
+
+      <div class="setup-section">
+        <span class="field-label" id="s-level-label">Level</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="s-level-label" id="s-level">
+          <button type="button" role="radio" data-level="classmate">Classmate's test</button>
+          <button type="button" role="radio" data-level="normal">Normal</button>
+          <button type="button" role="radio" data-level="challenge">Challenge</button>
+        </div>
+        <span class="field-hint" id="s-level-hint"></span>
+      </div>
+
+      <div class="setup-section">
+        <div class="slider-head"><label class="field-label" for="s-time">Time limit</label><output class="slider-value" id="s-time-out" for="s-time">60 min</output></div>
+        <input class="slider" id="s-time" type="range" min="10" max="120" step="5" value="60" list="s-time-marks" />
+        <datalist id="s-time-marks"><option value="10"></option><option value="30"></option><option value="60"></option><option value="90"></option><option value="120"></option></datalist>
+        <div class="slider-scale" aria-hidden="true"><span>10</span><span>30</span><span class="real">60 · real test</span><span>90</span><span>120</span></div>
+      </div>
+
+      <div class="setup-section">
+        <span class="field-label" id="s-buddy-label">Campfire</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="s-buddy-label" id="s-buddy">
+          <button type="button" role="radio" data-mode="chill">Chill</button>
+          <button type="button" role="radio" data-mode="normal">Normal</button>
+          <button type="button" role="radio" data-mode="off">No campfire</button>
+        </div>
+        <div class="switches" id="s-fire-switches">
+          <label class="switch-row">
+            <input type="checkbox" id="s-hardcore" role="switch" />
+            <span class="switch" aria-hidden="true"></span>
+            <span class="switch-text"><b>Puppy can lose</b><span>If the camp burns down or your puppy freezes, it's game over for the campfire. You can always keep going with the test.</span></span>
+          </label>
+          <label class="switch-row">
+            <input type="checkbox" id="s-drain" role="switch" />
+            <span class="switch" aria-hidden="true"></span>
+            <span class="switch-text"><b>Armadillo mode</b><span>Neglect the fire and the clock drains faster: <b>2×</b> outside the green, <b>3×</b> in the danger zones, <b>5×</b> while the camp is burnt or frozen.</span></span>
+          </label>
+        </div>
+        <p class="field-hint" id="s-fire-note"></p>
+      </div>
+
+      <div class="setup-section group-section">
+        <label class="switch-row">
+          <input type="checkbox" id="s-group" role="switch" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-text"><b>Group test</b><span>Get a code to share. Everyone gets the same questions in the same order.</span></span>
+        </label>
+        <div class="group-options" id="s-group-options" hidden>
+          <span class="field-label" id="s-start-label">When does it start?</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="s-start-label" id="s-start">
+            <button type="button" role="radio" data-start="0" class="active">When each person is ready</button>
+            <button type="button" role="radio" data-start="5">In 5 min</button>
+            <button type="button" role="radio" data-start="10">In 10 min</button>
+            <button type="button" role="radio" data-start="15">In 15 min</button>
+          </div>
+          <span class="field-hint" id="s-start-hint">Each person's clock starts when they press Start, and Pause still works.</span>
+          <label class="field-label" for="s-name">Your name (for the scoreboard)</label>
+          <input class="text-input" id="s-name" type="text" maxlength="18" placeholder="e.g. Aubrey" />
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" value="cancel" type="submit">Cancel</button>
+        <button class="btn btn-primary" value="ok" type="submit" id="s-go">Start test</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="dialog">
+    <form method="dialog">
+      <h2 id="dialog-title">Submit test?</h2>
+      <p id="dialog-body"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" value="cancel" id="dialog-cancel">Keep working</button>
+        <button class="btn btn-primary" value="ok" id="dialog-ok">Submit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="vendor/katex/katex.min.js" defer></script>
+  <script src="js/mathcheck.js" defer></script>
+  <script src="js/bank-mc.js" defer></script>
+  <script src="js/bank-nr.js" defer></script>
+  <script src="js/bank-wr.js" defer></script>
+  <script src="js/bank-classmate.js" defer></script>
+  <script src="js/bank-challenge.js" defer></script>
+  <script src="js/group.js" defer></script>
+  <script src="js/campfire.js" defer></script>
+  <script src="js/scratchpad.js" defer></script>
+  <script src="js/insights.js" defer></script>
+  <script src="js/tour.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
