@@ -28,6 +28,7 @@
       this._last = 0;
       this._lastMsg = "";
       this.onEvent = null; // called with "burnt" or "frozen" when the puppy loses
+      this.comp = null;    // optional Campfire Companion extras (js/companion.js)
       this._onFuel = () => this.addFuel();
       els.button.addEventListener("click", this._onFuel);
       this.render();
@@ -56,6 +57,7 @@
 
     destroy() {
       this.stop();
+      if (this.comp) { this.comp.destroy(); this.comp = null; }
       this.els.button.removeEventListener("click", this._onFuel);
     }
 
@@ -64,7 +66,8 @@
       if (this.status === "frozen") { this.status = "ok"; this.heat = 45; this.pending = []; this.flash("thaw"); return this.render(); }
       if (this.status === "burnt") { this.status = "ok"; this.heat = 50; this.pending = []; this.flash("rebuild"); return this.render(); }
       if (this.status === "burning") return;
-      this.pending.push({ left: LOG_HEAT });
+      if (this.comp && this.comp.locked()) { this.comp.notify("Your puppy's resting in the tent. The fire can wait a moment.", "warn"); return; }
+      this.pending.push({ left: LOG_HEAT * (this.comp ? this.comp.logMul() : 1) });
       this.stats.logs++;
       this.heat = Math.min(100, this.heat + 1.5); // small instant flare
       this.flash("log");
@@ -114,6 +117,7 @@
     // Switch the minigame off for the rest of the test
     turnOff() {
       this.stop();
+      if (this.comp) { this._compSnap = this.comp.snapshot(); this.comp.destroy(); this.comp = null; }
       this.origMode = this.mode;
       this.turnedOff = true;
       this.mode = "off";
@@ -131,10 +135,12 @@
         return;
       }
       if (this.status !== "ok") return;
+      if (this.comp) this.comp.tick(dt);
 
       const m = MODES[this.mode].decay;
-      const decay = (0.25 + this.heat * 0.003) * m; // hotter fires burn faster
+      const decay = (0.25 + this.heat * 0.003) * m * (this.comp ? this.comp.coolMul() : 1); // hotter fires burn faster
       this.heat -= decay * dt;
+      if (this.comp) this.heat += this.comp.heatDelta(dt);
 
       const rate = LOG_HEAT / LOG_BURN_IN;
       for (const p of this.pending) {
@@ -203,9 +209,10 @@
       if (button) {
         const label = this.status === "frozen" ? "Thaw puppy" : this.status === "burnt" ? "Rebuild camp" : this.status === "burning" ? "Burning…" : "Add log";
         if (buttonText.textContent !== label) buttonText.textContent = label;
-        button.disabled = this.status === "burning";
+        button.disabled = this.status === "burning" || !!(this.comp && this.comp.locked());
         button.dataset.state = this.status;
       }
+      if (this.comp) this.comp.render();
       const [msg, level] = this.message();
       if (status && msg !== this._lastMsg) {
         status.textContent = msg;
@@ -224,6 +231,7 @@
         logs: s.logs,
         cozyPercent: s.totalSeconds > 0 ? Math.round((s.cozySeconds / s.totalSeconds) * 100) : 100,
         revives: s.revives || 0,
+        companion: this.comp && this.comp.on ? this.comp.snapshot() : this._compSnap,
       };
     }
   }

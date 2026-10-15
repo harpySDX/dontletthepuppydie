@@ -1,5 +1,7 @@
 /*
- * CLASSMATE'S PRACTICE TEST — a fixed 34-mark test written by a classmate.
+ * TIM'S TEST — a fixed 34-mark practice test written by our classmate Tim.
+ * Credit: questions and marking guide by Tim (shared with permission for class study).
+ * Internal level id stays "classmate" so saved history and group codes keep working.
  * The teacher said it's about the same difficulty as the unit test, a bit softer.
  * Multiple-choice options keep the original A–D order (`order` lists which c[] goes in each slot).
  * As in every bank, c[0] is the correct answer.
@@ -100,5 +102,5 @@
     { id: "cm-mc10", topic: T.eq, q: R`The solution to \(\sqrt{x - 1} + 2 = 5\) is`, c: [M`10`, M`8`, M`26`, M`4`], order: [1, 0, 2, 3], e: R`\(\sqrt{x - 1} = 3 \Rightarrow x - 1 = 9 \Rightarrow x = 10\).` },
   ];
 
-  window.CLASSMATE = { wr, nr, mc };
+  window.CLASSMATE = { wr, nr, mc, title: "Tim's Test", credit: "Questions and marking guide by Tim." };
 })();

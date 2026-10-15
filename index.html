@@ -8,9 +8,17 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/katex/katex.min.css" />
   <link rel="stylesheet" href="css/style.css" />
+  <!-- Self-check styles: inline so they work even if css/style.css is missing -->
+  <style>
+    .deploy-check { position: fixed; inset: auto 12px 12px 12px; z-index: 9999; max-width: 720px; margin: 0 auto; padding: 16px 18px; border-radius: 12px;
+      background: #fff4e5; color: #3b2306; border: 2px solid #f0a040; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .deploy-check b { color: #8a3b00; }
+    .deploy-check code { background: #ffe2bd; padding: 1px 5px; border-radius: 4px; }
+    .deploy-check ul { margin: 6px 0 6px 18px; padding: 0; }
+  </style>
 </head>
 <body>
   <!-- Shared SVG definitions (kept rendered so gradients work everywhere) -->
@@ -49,7 +57,7 @@
       <circle cx="268" cy="38" r="15" fill="#f6efd2" />
       <circle cx="274" cy="34" r="13" fill="#152043" opacity="0.92" />
       <!-- trees -->
-      <g fill="#0e1a2e">
+      <g fill="#0e1a2e" class="trees">
         <polygon points="250,206 272,120 294,206" /><polygon points="276,210 300,104 324,210" />
         <polygon points="-8,206 14,128 36,206" />
       </g>
@@ -92,6 +100,24 @@
         </g>
       </g>
       <!-- puppy (nested groups so each animation has its own transform) -->
+      <!-- companion: puppy peeking from the tent (shown while it rests inside) -->
+      <g class="pup-peek" transform="translate(84 196)">
+        <ellipse cx="0" cy="4" rx="11" ry="9" fill="#d9a066" />
+        <path d="M-6,2 q2,2 4,0 M2,2 q2,2 4,0" fill="none" stroke="#2b1d14" stroke-width="1.4" stroke-linecap="round" />
+        <g fill="#cfe3ff" font-family="Inter, sans-serif" font-weight="700"><text x="10" y="-8" font-size="8">z</text><text x="16" y="-16" font-size="10">z</text></g>
+      </g>
+      <!-- companion: kettle -->
+      <g class="kettle" transform="translate(282 238)">
+        <ellipse cx="0" cy="14" rx="12" ry="3" fill="#000" opacity="0.25" />
+        <path d="M-11,12 q-2,-15 11,-17 q13,2 11,17 z" fill="#5b6b80" />
+        <path d="M-10,8 q10,3 20,0" stroke="#4a586b" stroke-width="2" fill="none" />
+        <path d="M10,2 q8,-1 10,-9" stroke="#5b6b80" stroke-width="3.2" fill="none" stroke-linecap="round" />
+        <path d="M-8,-5 q8,-11 16,0" stroke="#3b4757" stroke-width="2" fill="none" />
+        <g class="kettle-lid"><ellipse cx="0" cy="-5" rx="7" ry="2.4" fill="#7d8ea4" /><circle cx="0" cy="-8" r="1.6" fill="#7d8ea4" /></g>
+        <g class="steam" fill="#e6eef6"><circle cx="21" cy="-12" r="2.5" /><circle cx="24" cy="-19" r="3.5" /><circle cx="27" cy="-27" r="4.5" /></g>
+        <g class="pop-puff" fill="#eef4fa"><circle cx="-6" cy="-14" r="6" /><circle cx="5" cy="-18" r="7" /><circle cx="0" cy="-26" r="6" /></g>
+      </g>
+      <g class="pup-pos">
       <g class="puppy" transform="translate(126 252)">
         <ellipse class="pup-shadow" cx="0" cy="1" rx="30" ry="4" fill="#000" opacity="0.25" />
         <g class="pup-hop"><g class="pup-breathe"><g class="puppy-body">
@@ -130,6 +156,7 @@
         <path class="heart" d="M0,-96 c-4,-6 -12,-2 -8,4 l8,7 l8,-7 c4,-6 -4,-10 -8,-4 z" fill="#ff7a8a" />
         <g class="sparkle" fill="#ffd36b"><path d="M-26,-80 l2,-6 l2,6 l6,2 l-6,2 l-2,6 l-2,-6 l-6,-2 z" /><path d="M28,-74 l1.5,-4 l1.5,4 l4,1.5 l-4,1.5 l-1.5,4 l-1.5,-4 l-4,-1.5 z" /></g>
       </g>
+      </g>
       <!-- ice cube (frozen) -->
       <g class="ice">
         <rect x="88" y="160" width="76" height="98" rx="9" fill="url(#g-ice)" stroke="#f2fbff" stroke-width="2" />
@@ -143,6 +170,12 @@
         <use href="#flame" x="98" y="176" width="58" height="80" />
         <use href="#flame" x="128" y="190" width="44" height="62" />
       </g>
+      <!-- companion weather (hidden unless an event is on) -->
+      <path class="shooting-star" d="M30,26 l70,26" stroke="#fff6d8" stroke-width="2" stroke-linecap="round" />
+      <g class="fireflies" fill="#f6f1a0"><circle cx="158" cy="180" r="2.6" /><circle cx="53" cy="127" r="2.6" /><circle cx="178" cy="202" r="2.6" /><circle cx="248" cy="156" r="2.6" /><circle cx="217" cy="205" r="2.6" /><circle cx="197" cy="122" r="2.6" /><circle cx="256" cy="165" r="2.6" /><circle cx="106" cy="198" r="2.6" /></g>
+      <g class="rain" stroke="#b9cde3" stroke-width="1.3" stroke-linecap="round" opacity="0.8"><line x1="170" y1="57" x2="165" y2="71" /><line x1="207" y1="4" x2="202" y2="18" /><line x1="42" y1="28" x2="37" y2="42" /><line x1="192" y1="9" x2="187" y2="23" /><line x1="264" y1="89" x2="259" y2="103" /><line x1="24" y1="24" x2="19" y2="38" /><line x1="227" y1="194" x2="222" y2="208" /><line x1="40" y1="103" x2="35" y2="117" /><line x1="51" y1="197" x2="46" y2="211" /><line x1="35" y1="43" x2="30" y2="57" /><line x1="119" y1="11" x2="114" y2="25" /><line x1="300" y1="183" x2="295" y2="197" /><line x1="30" y1="93" x2="25" y2="107" /><line x1="28" y1="48" x2="23" y2="62" /><line x1="153" y1="194" x2="148" y2="208" /><line x1="78" y1="40" x2="73" y2="54" /><line x1="297" y1="137" x2="292" y2="151" /><line x1="291" y1="72" x2="286" y2="86" /><line x1="57" y1="76" x2="52" y2="90" /><line x1="195" y1="29" x2="190" y2="43" /><line x1="285" y1="12" x2="280" y2="26" /><line x1="293" y1="10" x2="288" y2="24" /></g>
+      <g class="hail" fill="#f4f8fc" stroke="#9fb3c8" stroke-width="0.6"><circle cx="236" cy="133" r="2.8" /><circle cx="236" cy="120" r="3.2" /><circle cx="102" cy="37" r="3.2" /><circle cx="248" cy="151" r="3.2" /><circle cx="100" cy="14" r="2.8" /><circle cx="160" cy="26" r="2.4" /><circle cx="280" cy="197" r="3.2" /><circle cx="26" cy="142" r="2.8" /><circle cx="236" cy="157" r="3.2" /><circle cx="85" cy="149" r="2.4" /><circle cx="275" cy="6" r="2.4" /><circle cx="23" cy="38" r="2.4" /><circle cx="312" cy="-3" r="2.8" /><circle cx="172" cy="102" r="3.2" /><circle cx="105" cy="122" r="2.4" /><circle cx="155" cy="117" r="2.4" /><circle cx="48" cy="107" r="3.2" /><circle cx="147" cy="94" r="3.2" /><circle cx="47" cy="171" r="2.8" /><circle cx="166" cy="184" r="2.4" /><circle cx="267" cy="63" r="2.4" /><circle cx="40" cy="134" r="2.4" /><circle cx="210" cy="17" r="2.8" /><circle cx="202" cy="7" r="2.4" /></g>
+      <rect class="fog" width="320" height="280" fill="#c4cfdb" />
       <!-- weather overlays -->
       <rect class="cold-overlay" width="320" height="280" fill="#9fd8ff" />
       <rect class="hot-overlay" width="320" height="280" fill="#ff5a1f" />
@@ -165,6 +198,12 @@
           <span class="brand-sub">Pre-Calc 11 · Radicals Unit Test Practice</span>
         </span>
       </a>
+      <nav class="main-nav" id="main-nav" aria-label="Main">
+        <button type="button" data-go="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20l9-15 9 15z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20l2-4 2 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Basecamp</span></button>
+        <button type="button" data-go="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h5a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5zM19 4h-5a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Library</span></button>
+        <button type="button" data-go="review"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Review</span><span class="nav-badge" id="nav-review-badge" hidden>0</span></button>
+        <button type="button" data-go="learning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>My Learning</span></button>
+      </nav>
       <div class="topbar-test" id="topbar-test" hidden>
         <div class="tb-progress">
           <div class="tb-progress-text"><span id="q-counter">Written Response · Q1 of 5</span><span id="answered-counter">0/20 answered</span></div>
@@ -222,7 +261,7 @@
             <div class="card-head progress-head">
               <h2>Your progress</h2>
               <div class="segmented small-seg level-seg" role="tablist" aria-label="Show progress for" id="level-pick">
-                <button type="button" role="tab" data-level="classmate">Classmate's</button>
+                <button type="button" role="tab" data-level="classmate">Tim's</button>
                 <button type="button" role="tab" data-level="normal">Normal</button>
                 <button type="button" role="tab" data-level="challenge">Challenge</button>
               </div>
@@ -235,17 +274,18 @@
         <div class="card group-card" id="group-card">
           <div class="group-intro">
             <h2>Study together</h2>
-            <p class="muted">Make a group test and share the code. Everyone gets the <b>same questions in the same order</b>, so you can talk them through on a call. Set a start time and everyone's clock runs together. Afterwards, swap result codes to see a group scoreboard.</p>
+            <p class="muted">No accounts, no server. A <b>group test</b> gives everyone the same timed test. A <b>study room</b> is a shared practice set on the concepts you pick, self-paced or in sync, with optional hints and a group summary at the end. Nobody's history, answers or files are shared unless they choose to paste a result code.</p>
           </div>
           <div class="group-actions">
             <div class="group-box">
               <h3>Host</h3>
               <button class="btn btn-primary btn-block" id="btn-group-create" type="button">Create a group test</button>
+              <button class="btn btn-secondary btn-block" id="btn-room-create" type="button">Open a study room</button>
             </div>
             <form class="group-box" id="join-form" autocomplete="off">
               <h3><label for="join-code">Join with a code</label></h3>
               <div class="join-row">
-                <input class="text-input code-input" id="join-code" type="text" placeholder="XXXX-XXXX-XXXX" maxlength="16" spellcheck="false" autocapitalize="characters" />
+                <input class="text-input code-input" id="join-code" type="text" placeholder="Group or room code" maxlength="24" spellcheck="false" autocapitalize="characters" />
                 <button class="btn btn-secondary" type="submit">Join</button>
               </div>
               <p class="form-error" id="join-error" role="alert"></p>
@@ -273,6 +313,74 @@
           <div class="card-head"><h2>Topic mastery</h2><span class="muted small">Recent tests count more.</span></div>
           <div id="mastery"></div>
         </div>
+      </section>
+
+      <!-- ───────── CONCEPT LIBRARY ───────── -->
+      <section class="screen screen-library" id="screen-library" hidden>
+        <div class="lib" id="lib">
+          <aside class="lib-side" aria-label="Concepts">
+            <div class="lib-side-head">
+              <span class="lib-course">Pre-Calculus 11</span>
+              <button class="icon-btn" id="lib-collapse" type="button" aria-expanded="true" aria-label="Hide the concept list"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="lib-side-body">
+              <label class="sr-only" for="lib-search">Search concepts</label>
+              <input class="text-input lib-search" id="lib-search" type="search" placeholder="Search: rationalize, x^-2…" autocomplete="off" />
+              <div class="lib-filter" id="lib-filter" role="group" aria-label="Filter concepts">
+                <button type="button" data-filter="all" class="active" aria-pressed="true">All</button>
+                <button type="button" data-filter="attention" aria-pressed="false">Attention</button>
+                <button type="button" data-filter="due" aria-pressed="false">Due</button>
+                <button type="button" data-filter="new" aria-pressed="false">New</button>
+              </div>
+              <div id="lib-nav"></div>
+            </div>
+          </aside>
+          <article class="lib-main" id="lib-main" aria-live="polite"></article>
+          <aside class="lib-ctx" id="lib-ctx" aria-label="Your progress on this concept"></aside>
+        </div>
+      </section>
+
+      <!-- ───────── REVIEW (spaced repetition + Mistake Notebook) ───────── -->
+      <section class="screen screen-review" id="screen-review" hidden>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Review</p>
+            <h1>Remember what you've learned</h1>
+            <p class="lead">Spaced reviews bring each concept back just before you'd forget it, and the Mistake Notebook keeps every question you got wrong until you've fixed it.</p>
+          </div>
+        </div>
+        <div id="rv-body"></div>
+      </section>
+
+      <!-- ───────── MY LEARNING (Learning Analyst) ───────── -->
+      <section class="screen screen-learning" id="screen-learning" hidden>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">My Learning</p>
+            <h1>What to study next</h1>
+            <p class="lead" id="ml-sources"></p>
+          </div>
+        </div>
+        <div id="ml-body"></div>
+      </section>
+
+      <!-- ───────── STUDY ROOM ───────── -->
+      <section class="screen screen-room" id="screen-room" hidden>
+        <div class="page-head room-head">
+          <div>
+            <p class="eyebrow">Study room</p>
+            <h1>Practise together</h1>
+            <div class="room-meta" id="room-meta"></div>
+          </div>
+          <div class="share-box room-share">
+            <span class="share-label">Room code</span>
+            <div class="share-code room-code" id="room-code">R000-0000-0000-0000</div>
+            <div class="share-actions"><button class="btn btn-secondary btn-sm" data-room="copy-code" type="button">Copy code</button><button class="btn btn-secondary btn-sm" data-room="copy-link" type="button">Copy invite link</button></div>
+            <p class="copy-note" id="room-share-note" role="status"></p>
+          </div>
+        </div>
+        <p class="faint small room-privacy">Answers stay on your device. Nothing is shared unless you choose to copy your result code at the end.</p>
+        <div id="room-main"></div>
       </section>
 
       <!-- ───────── GROUP LOBBY ───────── -->
@@ -324,6 +432,7 @@
           <aside class="buddy-panel" aria-label="Campfire buddy">
             <div class="scene-slot" id="test-scene"></div>
             <p class="buddy-status" id="buddy-status" role="status">Your puppy is cozy.</p>
+            <div class="comp" id="companion" hidden></div>
           </aside>
 
           <div class="test-main">
@@ -348,7 +457,7 @@
               <div class="nav-grid" id="nav-grid"></div>
               <button class="btn btn-primary btn-block" id="btn-submit" type="button">Submit test</button>
             </div>
-            <p class="kbd-hint">Shortcuts (when not typing): <kbd>1</kbd>–<kbd>4</kbd> pick a choice · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>F</kbd> add log · <kbd>N</kbd> scratchpad · <kbd>P</kbd> pause</p>
+            <p class="kbd-hint">Shortcuts (when not typing): <kbd>1</kbd>–<kbd>4</kbd> pick a choice · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>F</kbd> add log<span id="kbd-comp"></span> · <kbd>N</kbd> scratchpad · <kbd>P</kbd> pause</p>
           </div>
 
           <aside class="heat-panel" aria-label="Fire heat">
@@ -437,6 +546,42 @@
         Scratchpad <span class="sp-mini-page"></span><i class="sp-ink-dot" aria-hidden="true"></i>
       </button>
     </section>
+    <!-- Floating AI tutor (hidden during any unfinished test) -->
+    <div class="tutor" id="tutor" hidden>
+      <button class="tutor-launcher" id="tutor-launcher" type="button" aria-expanded="false" aria-controls="tutor-panel" aria-label="Ask the AI tutor">
+        <svg class="tl-icon" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z" fill="currentColor"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor"/></svg>
+        <span class="tl-lock" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.5"/></svg></span>
+        <span class="tl-tip" aria-hidden="true">Ask the tutor</span>
+      </button>
+      <div class="tutor-locked" id="tutor-locked" hidden role="dialog" aria-labelledby="tutor-locked-title">
+        <p id="tutor-locked-title"><b>The tutor is off while a test is unfinished.</b></p>
+        <p class="muted small" id="tutor-locked-text">That keeps practice tests honest. Finish or discard your test and the tutor comes right back.</p>
+        <div class="tutor-locked-actions">
+          <button class="btn btn-primary btn-sm" id="tutor-locked-resume" type="button">Resume test</button>
+          <button class="btn btn-secondary btn-sm" id="tutor-locked-discard" type="button">Discard test</button>
+          <button class="btn btn-ghost btn-sm" id="tutor-locked-close" type="button">Close</button>
+        </div>
+      </div>
+      <section class="tutor-panel" id="tutor-panel" hidden aria-label="AI tutor">
+        <header class="tutor-head" id="tutor-head">
+          <span class="tutor-title">Tutor</span>
+          <span class="tutor-head-actions">
+            <button type="button" class="tutor-icon" id="tutor-new" title="New conversation" aria-label="New conversation"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+            <button type="button" class="tutor-icon" id="tutor-min" title="Minimize" aria-label="Minimize tutor"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+          </span>
+        </header>
+        <div class="tutor-context" id="tutor-context"></div>
+        <div class="tutor-modes" id="tutor-modes" role="radiogroup" aria-label="Tutor mode"></div>
+        <div class="tutor-log" id="tutor-log" aria-live="polite"></div>
+        <div class="tutor-suggest" id="tutor-suggest"></div>
+        <form class="tutor-form" id="tutor-form" autocomplete="off">
+          <label class="sr-only" for="tutor-input">Message the tutor</label>
+          <textarea class="tutor-input" id="tutor-input" rows="1" placeholder="Ask about this page…" maxlength="2000"></textarea>
+          <button class="btn btn-primary tutor-send" id="tutor-send" type="submit" aria-label="Send">Send</button>
+        </form>
+      </section>
+    </div>
+
     <footer class="footer">Made for Pre-Calc 11 study sessions. Progress is saved in this browser only.</footer>
   </div>
 
@@ -495,7 +640,7 @@
       <div class="setup-section">
         <span class="field-label" id="s-level-label">Level</span>
         <div class="segmented" role="radiogroup" aria-labelledby="s-level-label" id="s-level">
-          <button type="button" role="radio" data-level="classmate">Classmate's test</button>
+          <button type="button" role="radio" data-level="classmate">Tim's Test</button>
           <button type="button" role="radio" data-level="normal">Normal</button>
           <button type="button" role="radio" data-level="challenge">Challenge</button>
         </div>
@@ -509,26 +654,57 @@
         <div class="slider-scale" aria-hidden="true"><span>10</span><span>30</span><span class="real">60 · real test</span><span>90</span><span>120</span></div>
       </div>
 
-      <div class="setup-section">
-        <span class="field-label" id="s-buddy-label">Campfire</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="s-buddy-label" id="s-buddy">
-          <button type="button" role="radio" data-mode="chill">Chill</button>
-          <button type="button" role="radio" data-mode="normal">Normal</button>
-          <button type="button" role="radio" data-mode="off">No campfire</button>
-        </div>
-        <div class="switches" id="s-fire-switches">
-          <label class="switch-row">
+      <div class="setup-section camp-section">
+        <label class="switch-row camp-master">
+          <input type="checkbox" id="s-camp" role="switch" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-text"><b>Campfire minigame</b><span id="s-camp-hint">Off: just you and the test. Best when you want to concentrate.</span></span>
+        </label>
+        <div class="camp-body" id="s-camp-body" hidden>
+          <div class="camp-full" id="s-camp-full">
+            <span class="camp-full-ico" aria-hidden="true">🔥</span>
+            <span class="camp-full-t"><span class="cs-line"><b>Full campfire</b><span class="rec-pill">Recommended</span></span><small id="s-camp-full-text">Your puppy, the fire and every mechanic and event. The most fun way to play. Math still comes first: events never pause the test.</small></span>
+            <button class="btn btn-secondary btn-sm" type="button" id="s-camp-reset" hidden>Back to full</button>
+          </div>
+          <div class="camp-pace">
+            <span class="field-label" id="s-buddy-label">Fire pace</span>
+            <div class="segmented small-seg" role="radiogroup" aria-labelledby="s-buddy-label" id="s-buddy">
+              <button type="button" role="radio" data-mode="chill">Chill</button>
+              <button type="button" role="radio" data-mode="normal">Normal</button>
+            </div>
+          </div>
+          <details class="camp-custom" id="s-camp-custom">
+            <summary>Customize <span class="faint" id="s-camp-custom-sum"></span></summary>
+          <div class="comp-setup" id="s-comp">
+            <div class="cs-head"><span class="field-label">Camp mechanics</span></div>
+            <div class="cs-mech" id="s-comp-mech"></div>
+            <label class="switch-row cs-events-switch">
+              <input type="checkbox" id="s-comp-events" role="switch" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-text"><b>Random events</b><span>Weather, wind and puppy moments now and then. They never pause the test, cover a question or need an instant reaction.</span></span>
+            </label>
+            <div class="cs-events" id="s-comp-ev" hidden>
+              <div class="cs-tools"><span class="field-hint" id="s-comp-count"></span><span><button class="btn btn-link btn-sm" type="button" data-cs="all">All</button> · <button class="btn btn-link btn-sm" type="button" data-cs="none">None</button></span></div>
+              <div id="s-comp-list"></div>
+            </div>
+            <p class="field-hint cs-sum" id="s-comp-sum"></p>
+          </div>
+            <div class="cs-head"><span class="field-label">Extra challenge</span><span class="field-hint">Off unless you want them. Armadillo mode speeds up the real test clock.</span></div>
+            <div class="switches" id="s-fire-switches">
+              <label class="switch-row">
             <input type="checkbox" id="s-hardcore" role="switch" />
             <span class="switch" aria-hidden="true"></span>
             <span class="switch-text"><b>Puppy can lose</b><span>If the camp burns down or your puppy freezes, it's game over for the campfire. You can always keep going with the test.</span></span>
           </label>
-          <label class="switch-row">
+              <label class="switch-row">
             <input type="checkbox" id="s-drain" role="switch" />
             <span class="switch" aria-hidden="true"></span>
             <span class="switch-text"><b>Armadillo mode</b><span>Neglect the fire and the clock drains faster: <b>2×</b> outside the green, <b>3×</b> in the danger zones, <b>5×</b> while the camp is burnt or frozen.</span></span>
           </label>
+            </div>
+            <p class="field-hint" id="s-fire-note"></p>
+          </details>
         </div>
-        <p class="field-hint" id="s-fire-note"></p>
       </div>
 
       <div class="setup-section group-section">
@@ -558,6 +734,45 @@
     </form>
   </dialog>
 
+  <dialog class="dialog sheet" id="sheet" aria-labelledby="sheet-title">
+    <div class="sheet-head"><h2 id="sheet-title">Details</h2><button class="icon-btn" id="sheet-close" type="button" aria-label="Close">×</button></div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </dialog>
+
+  <dialog class="dialog room-dialog" id="room-dialog" aria-labelledby="room-dialog-title">
+    <form id="room-form">
+      <h2 id="room-dialog-title">Open a study room</h2>
+      <p class="muted small">Pick what to practise. Everyone who opens the code gets the same questions in the same order.</p>
+      <div class="setup-section">
+        <div class="slider-head"><span class="field-label">Concepts</span><button class="btn btn-link btn-sm" id="rc-weak" type="button">Use my weakest concepts</button></div>
+        <div class="room-concepts" id="room-concepts"></div>
+      </div>
+      <div class="setup-section">
+        <span class="field-label">Questions</span>
+        <div class="segmented" id="rc-count" role="radiogroup"><button type="button" role="radio" data-count="5">5</button><button type="button" role="radio" data-count="8">8</button><button type="button" role="radio" data-count="10">10</button><button type="button" role="radio" data-count="12">12</button></div>
+      </div>
+      <div class="setup-section">
+        <span class="field-label">Pace</span>
+        <div class="segmented" id="rc-pace-mode" role="radiogroup"><button type="button" role="radio" data-mode="self">Self-paced</button><button type="button" role="radio" data-mode="synced">Together (synced)</button></div>
+        <div class="group-options" id="rc-synced-opts" hidden>
+          <span class="field-hint">Seconds per question</span>
+          <div class="segmented small-seg" id="rc-pace" role="radiogroup"><button type="button" role="radio" data-pace="60">60</button><button type="button" role="radio" data-pace="90">90</button><button type="button" role="radio" data-pace="120">120</button><button type="button" role="radio" data-pace="180">180</button></div>
+          <span class="field-hint">Starts in (minutes)</span>
+          <div class="segmented small-seg" id="rc-start" role="radiogroup"><button type="button" role="radio" data-start="1">1</button><button type="button" role="radio" data-start="2">2</button><button type="button" role="radio" data-start="5">5</button><button type="button" role="radio" data-start="10">10</button></div>
+        </div>
+      </div>
+      <div class="setup-section">
+        <label class="switch-row"><input type="checkbox" id="rc-hints" role="switch" /><span class="switch" aria-hidden="true"></span><span class="switch-text"><b>Allow hints and the AI tutor</b><span>Turn off for a quiz-style room where everyone works alone.</span></span></label>
+      </div>
+      <div class="setup-section">
+        <label class="field-label" for="room-name-in">Your name <span class="faint small">(optional, only in result codes you share)</span></label>
+        <input class="text-input" id="room-name-in" maxlength="18" placeholder="e.g. Aubrey" />
+      </div>
+      <p class="faint small" id="rc-note"></p>
+      <div class="dialog-actions"><button class="btn btn-secondary" type="button" id="room-cancel">Cancel</button><button class="btn btn-primary" type="submit" id="rc-go">Open the room</button></div>
+    </form>
+  </dialog>
+
   <dialog class="dialog" id="dialog">
     <form method="dialog">
       <h2 id="dialog-title">Submit test?</h2>
@@ -578,9 +793,41 @@
   <script src="js/bank-challenge.js" defer></script>
   <script src="js/group.js" defer></script>
   <script src="js/campfire.js" defer></script>
+  <script src="js/companion.js" defer></script>
   <script src="js/scratchpad.js" defer></script>
   <script src="js/insights.js" defer></script>
+  <script src="js/concepts.js" defer></script>
+  <script src="js/learning.js" defer></script>
+  <script src="js/docs.js" defer></script>
+  <script src="js/practice.js" defer></script>
+  <script src="js/library.js" defer></script>
+  <script src="js/review.js" defer></script>
+  <script src="js/rooms.js" defer></script>
+  <script src="js/analyst.js" defer></script>
+  <script src="js/tutor.js" defer></script>
   <script src="js/tour.js" defer></script>
   <script src="js/app.js" defer></script>
+  <!-- Self-check: if the css/, js/ or vendor/ folders didn't upload, say so instead of looking broken -->
+  <script>
+    window.addEventListener("load", function () {
+      var missing = [];
+      var bg = getComputedStyle(document.body).backgroundColor;
+      if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") missing.push("css/style.css");
+      if (!window.MathCheck) missing.push("js/mathcheck.js");
+      if (!window.MC_BANK || !window.WR_BANK) missing.push("js/bank-*.js");
+      if (!window.Campfire) missing.push("js/campfire.js");
+      if (!window.katex) missing.push("vendor/katex/katex.min.js");
+      if (!window.Practice || !window.Review || !window.Rooms) missing.push("js/practice.js, js/review.js, js/rooms.js");
+      if (!missing.length) return;
+      var box = document.createElement("div");
+      box.className = "deploy-check";
+      box.setAttribute("role", "alert");
+      box.innerHTML = "<b>Campfire Prep couldn't load some of its files.</b> The page found <code>index.html</code>, but not:" +
+        "<ul><li><code>" + missing.join("</code></li><li><code>") + "</code></li></ul>" +
+        "The <code>css</code>, <code>js</code> and <code>vendor</code> <b>folders</b> need to sit next to <code>index.html</code> at the top of the repo. " +
+        "Open your GitHub repo: you should see those three folders. If you don't, upload them (drag the folders themselves, not just the files inside), then Vercel redeploys automatically.";
+      document.body.appendChild(box);
+    });
+  </script>
 </body>
 </html>

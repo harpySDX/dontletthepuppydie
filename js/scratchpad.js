@@ -260,7 +260,7 @@
           handle.addEventListener("pointercancel", up);
         });
       };
-      drag(head, (dx, dy, r) => { this.prefs.x = r.left + dx; this.prefs.y = r.top + dy; this._place(); });
+      drag(head, (dx, dy, r) => { this.prefs.x = r.left + dx; this.prefs.y = r.top + dy; this.prefs.moved = true; this._place(); });
       drag(grip, (dx, dy, r) => {
         this.prefs.big = false;
         this.root.classList.remove("big");
@@ -295,9 +295,10 @@
       } else {
         w = Math.max(260, Math.min(p.w, vw - m * 2));
         h = Math.max(220, Math.min(p.h, vh - m * 2));
-        // Default home: bottom-left, under the puppy, clear of the heat bar and Add log button
-        x = p.x ?? 20;
-        y = p.y ?? vh - h - 24;
+        // Default home: bottom-left, under the puppy, clear of the heat bar and Add log button.
+        // With the Campfire Companion controls under the puppy, it starts bottom-centre instead.
+        x = p.moved ? p.x : this.avoidLeft ? (vw - w) / 2 : 20;
+        y = p.moved ? p.y : vh - h - 24;
         x = Math.max(m, Math.min(x, vw - w - m));
         y = Math.max(m, Math.min(y, vh - 48));
         p.w = w; p.h = h; p.x = x; p.y = y;

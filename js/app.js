@@ -17,6 +17,13 @@
     session: "campfire-prep.session.v2",
     prefs: "campfire-prep.prefs.v1",
     toured: "campfire-prep.toured.v1",
+    practice: "campfire-prep.practice.v1",   // concept-quiz answers (learning evidence)
+    feedback: "campfire-prep.feedback.v1",   // helpful / confusing votes per lesson
+    done: "campfire-prep.done.v1",           // study-plan items marked done
+    exam: "campfire-prep.exam.v1",           // exam date, units in scope, minutes/day, study days, priorities
+    notebook: "campfire-prep.notebook.v1",   // Mistake Notebook: { key: { understood, cat, note } } (answers themselves come from history)
+    room: "campfire-prep.room.v1",           // the study room you're in (answers so far), survives refresh
+    roomBoards: "campfire-prep.roomboards.v1", // result codes you've pasted, per room
   };
 
   const $ = (s, root = document) => root.querySelector(s);
@@ -30,7 +37,7 @@
     wr: new Map([...WRB, ...CHW, ...CM.wr].map((q) => [q.id, q])),
   };
   const LEVELS = {
-    classmate: { label: "Classmate's test", short: "Classmate", hint: "Your classmate's practice test: the same 20 questions every time. Your teacher says it's a bit softer than the real test." },
+    classmate: { label: "Tim's Test", short: "Tim's", hint: "A practice test written by Tim, credited with thanks: the same 20 questions every time. Your teacher says it's a bit softer than the real test." },
     normal: { label: "Normal", short: "Normal", hint: "Unit-test level, laid out like the real thing. Fresh questions every time." },
     challenge: { label: "Challenge", short: "Challenge", hint: "Much harder than the real test: nested radicals, cube-root conjugates, double squaring. A lower mark here is normal." },
   };
@@ -45,7 +52,7 @@
     del(key) { try { localStorage.removeItem(key); } catch { /* ignore */ } },
   };
   const getHistory = () => store.get(KEYS.history, []);
-  const getPrefs = () => Object.assign({ buddyMode: "normal", level: "normal", name: "", minutes: 60, hardcore: false, drain: false }, store.get(KEYS.prefs, {}));
+  const getPrefs = () => Object.assign({ buddyMode: "off", level: "normal", name: "", minutes: 60, hardcore: false, drain: false }, store.get(KEYS.prefs, {}));
   const setPrefs = (p) => store.set(KEYS.prefs, { ...getPrefs(), ...p });
 
   // ───────────────────────── helpers ─────────────────────────
@@ -85,15 +92,91 @@
   const compareAttempts = (a, b) => b.percent - a.percent || a.totalTime - b.totalTime;
 
   // ───────────────────────── state ─────────────────────────
-  let session = null, fire = null, timerId = null, lastTick = 0, lastSave = 0;
+  let session = null, fire = null, timerId = null, lastTick = 0, lastSave = 0, lastTyped = 0;
   let viewing = null, reviewFilter = "all";
   let pad = null;
 
   function show(name) {
     for (const s of $$(".screen")) s.hidden = s.id !== `screen-${name}`;
     $("#topbar-test").hidden = name !== "test";
+    $("#main-nav").hidden = !["home", "library", "review", "learning", "results", "room"].includes(name);
+    for (const b of $$("#main-nav button")) {
+      const on = b.dataset.go === name || (name === "results" && b.dataset.go === "home") || (name === "room" && b.dataset.go === "home");
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    }
     document.body.dataset.screen = name;
     window.scrollTo({ top: 0 });
+    if (window.Review && name !== "test") window.Review.updateBadge();
+    if (window.Tutor) window.Tutor.refresh();
+  }
+
+  // ───────── learning evidence (shared by Basecamp, Library, My Learning, Tutor) ─────────
+  // Challenge tests are excluded so harder-than-the-test questions don't drag down mastery.
+  // Challenge evidence is included but kept separate by the mastery model: it can add variety and
+  // "harder questions right", but never lowers accuracy (it's much harder than the real test).
+  function learningState() {
+    const histAll = getHistory().map((a) => ({ ...a, level: levelOf(a) }));
+    const practice = store.get(KEYS.practice, []);
+    const allRecords = window.Learning.buildEvidence(histAll, practice, { qOf, gradeParts: (it) => gradeItem(it).parts, conceptsFor: window.Concepts.conceptsFor });
+    // Blank answers only count as evidence (and as notebook mistakes) when the test was a genuine
+    // attempt (at least half answered), so an abandoned or submitted-empty test doesn't read as "doesn't know it".
+    const att = {};
+    for (const r of allRecords) if (r.source === "test") { const a = att[r.attempt] || (att[r.attempt] = { n: 0, blank: 0 }); a.n++; if (r.blank) a.blank++; }
+    const genuine = (r) => r.source !== "test" || !r.blank || (att[r.attempt] && att[r.attempt].blank / att[r.attempt].n <= 0.5);
+    const records = allRecords.filter(genuine);
+    const ids = window.Concepts.CONCEPTS.map((c) => c.id);
+    const prof = window.Learning.profile(records, ids);
+    const docConcepts = new Set(Object.values(store.get("campfire-prep.docindex.v1", {})).flat());
+    const exam = { date: "", units: [], minutesPerDay: 30, days: [], priorities: [], ...store.get(KEYS.exam, {}) };
+    const notebook = store.get(KEYS.notebook, {});
+    const mistakes = window.Learning.mistakes(records.filter((r) => r.level !== "challenge"), { answerOf: (r) => { if (r.kind !== "nr") return undefined; const q = BANKS.nr.get(r.qid); return q ? Number(q.answer) : undefined; } })
+      .map((m) => { const st = notebook[m.key] || {}; return { ...m, category: st.cat || m.autoCategory, catByYou: !!st.cat, understood: st.understood || null, note: st.note || "" }; });
+    const open = mistakes.filter((m) => !m.fixed && !m.understood);
+    const mistakeCounts = {};
+    for (const m of open) for (const c of m.concepts) mistakeCounts[c] = (mistakeCounts[c] || 0) + 1;
+    const recs = window.Learning.recommend(prof, { concepts: window.Concepts.CONCEPTS, feedback: store.get(KEYS.feedback, {}), docConcepts, scopeUnits: exam.units, done: store.get(KEYS.done, {}), priorities: exam.priorities, mistakeCounts });
+    const unitOf = (id) => window.Concepts.get(id).unit;
+    const dueConcepts = window.Learning.dueConcepts(prof, { scopeUnits: exam.units, unitOf });
+    // mistakes due for a revisit: spaced steps, and not already marked understood
+    const dueMistakes = mistakes.filter((m) => m.isDue && !m.understood);
+    return {
+      skippedBlanks: allRecords.length - records.length,
+      prof, recs, records, mistakes, dueMistakes, dueConcepts, mistakeCounts, docConcepts, exam, unitOf,
+      tests: histAll.filter((a) => a.level !== "challenge").length, challengeTests: histAll.filter((a) => a.level === "challenge").length,
+      quizAnswers: practice.filter((p) => p.level !== "challenge").length,
+    };
+  }
+
+  // Is any assessment unfinished (running OR paused OR saved)? The tutor is unavailable while it is.
+  // "live"   = a test (or the tour's sample test) is open on screen
+  // "paused" / "saved" = an unfinished test is waiting in Basecamp
+  // null     = no assessment, tutor allowed
+  function assessmentState() {
+    if (session) return "live";
+    const s = store.get(KEYS.session, null);
+    if (!(s && s.items)) return null;
+    const n = normalizeSession(s);
+    if (timeLeftOf(n) <= 0) return null; // time is up: it is marked as soon as Basecamp renders
+    return n.paused ? "paused" : "saved";
+  }
+  const isAssessmentActive = () => !!assessmentState();
+  async function discardSaved() {
+    if (!(await confirmDialog("Discard this test?", "Your answers on the unfinished test will be deleted. It won't count in your history.", "Discard", "Keep it"))) return false;
+    store.del(KEYS.session);
+    if (document.body.dataset.screen === "home") renderHome();
+    if (window.Tutor) window.Tutor.refresh();
+    return true;
+  }
+
+  function navigate(where, arg) {
+    if (isAssessmentActive() && session) return; // never navigate away from a running test via the nav
+    if (lobby) { clearInterval(lobby.timer); lobby = null; }
+    if (where === "library") { show("library"); window.Library.open(arg); }
+    else if (where === "learning") { show("learning"); window.Analyst.render(); }
+    else if (where === "review") { show("review"); window.Review.render(); }
+    else if (where === "room" && window.Rooms) { window.Rooms.show(); }
+    else goHome();
   }
   const makeScene = () => $("#scene-template").content.firstElementChild.cloneNode(true);
 
@@ -181,6 +264,7 @@
       `<span>${esc(window.Campfire.MODES[prefs.buddyMode].label)}${fireOn && prefs.buddyMode !== "off" ? " campfire" : ""}</span>`,
       fireOn && prefs.hardcore ? `<span class="on">Puppy can lose</span>` : "",
       fireOn && prefs.drain ? `<span class="on">Armadillo mode</span>` : "",
+      fireOn && window.Companion && window.Companion.summary(prefs.companion || window.Companion.full()) ? `<span class="on">${esc(window.Companion.summary(prefs.companion || window.Companion.full()))}</span>` : "",
     ].join("");
     for (const b of $$("#level-pick button")) { const on = b.dataset.level === lv; b.classList.toggle("active", on); b.setAttribute("aria-checked", on); }
     document.querySelector(".launch-card").dataset.level = prefs.level;
@@ -207,10 +291,10 @@
       <div class="tile${atLevel.count ? "" : " empty-tile"}"><span class="tile-value">${atLevel.count ? atLevel.recentAvg + "%" : "—"}</span><span class="tile-label">${esc(ln)} average${atLevel.count ? `, last ${Math.min(5, atLevel.count)}` : ""}</span></div>
       <div class="tile${all.count ? "" : " empty-tile"}"><span class="tile-value">${all.count ? hoursMins(all.studySeconds) : "—"}</span><span class="tile-label">time practising</span></div>`;
     renderTrend(atLevel, LEVELS[lv].label);
-    renderFocus(core);
+    renderFocus();
     renderHabits(core);
     renderHistory(history);
-    renderMastery(core);
+    renderMastery();
   }
 
   // Score trend: one series, 0–100% scale, best and latest labelled, hover tooltip.
@@ -266,23 +350,30 @@
     }
   }
 
-  function renderFocus(ins) {
+  function renderFocus() {
     const el = $("#focus");
-    if (!ins.count) { el.innerHTML = `<p class="empty-note">After your first test, the topics that cost you the most marks show up here, each with a tip for fixing it.</p>`; return; }
-    const weak = ins.topics.filter((t) => t.pct < 85).slice(0, 3);
-    const strong = ins.topics.filter((t) => t.pct >= 85).sort((a, b) => b.pct - a.pct).slice(0, 4);
-    el.innerHTML = (weak.length ? weak.map((t, k) => `
-      <div class="focus-item ${window.Insights.level(t.pct)}">
+    const L = learningState();
+    if (!L.records.length) {
+      el.innerHTML = `<p class="empty-note">No learning records yet. Take a practice test (Tim's Test makes a good diagnostic) or try a concept quiz in the <button class="btn-inline" data-go="library" type="button">Concept Library</button>, and your recommendations will appear here.</p>`;
+      return;
+    }
+    const top = L.recs.filter((r) => r.status !== "not_attempted").slice(0, 3);
+    const docs = Object.keys(store.get("campfire-prep.docindex.v1", {})).length;
+    el.innerHTML = (top.length ? `<p class="next-action"><b>Next step:</b> ${esc(top[0].title)} — ${top[0].activity === "quiz" ? "take a 5-question quiz" : "read the lesson, then take the quiz"} (about ${top[0].minutes} min, estimate).</p>` + top.map((r, k) => `
+      <div class="focus-item ${r.tone}">
         <div class="focus-top">
           <span class="focus-rank">${k + 1}</span>
-          <span class="focus-name">${esc(t.topic)}</span>
-          <span class="level-pill ${window.Insights.level(t.pct)}">${window.Insights.levelLabel(t.pct)} · ${t.pct}%</span>
+          <span class="focus-name">${esc(r.title)}</span>
+          <span class="level-pill ${r.tone === "good" ? "strong" : r.tone === "none" ? "mid" : r.tone}">${esc(r.label)}</span>
         </div>
-        <div class="bar"><div class="bar-fill ${window.Insights.level(t.pct) === "low" ? "low" : "mid"}" style="width:${t.pct}%"></div></div>
-        <p class="focus-meta">${fmtMarks(t.earned)} of ${t.max} marks across ${t.seen} question${t.seen > 1 ? "s" : ""}${t.lastPct !== null ? ` · last test ${t.lastPct}%` : ""}</p>
-        <p class="focus-tip"><b>Try this:</b> ${esc(t.tip)}</p>
-      </div>`).join("") : `<p class="empty-note">Nothing below 85% right now. Keep taking tests to stay sharp.</p>`) +
-      (strong.length ? `<div class="strong-row"><span class="muted small">Strong:</span>${strong.map((t) => `<span class="chip chip-good">${esc(t.topic)} ${t.pct}%</span>`).join("")}</div>` : "");
+        <p class="focus-meta">${esc(r.why)}</p>
+        ${r.extra.length ? `<p class="focus-meta">${r.extra.map(esc).join(" ")}</p>` : ""}
+        <div class="focus-actions">
+          <button class="btn btn-secondary btn-sm" data-lesson="${r.concept}" type="button">Open lesson</button>
+          <button class="btn btn-secondary btn-sm" data-quiz="${r.concept}" type="button">Quiz me (5)</button>
+        </div>
+      </div>`).join("") : `<p class="empty-note">Nothing needs urgent work based on your records. Keep your streak going with a quiz on something you haven't tried yet.</p>`) +
+      `<p class="focus-foot"><button class="btn-inline" data-go="learning" type="button">See your full study plan</button>${docs ? ` · ${docs} study file${docs > 1 ? "s" : ""} uploaded` : ""}</p>`;
   }
 
   function renderHabits(ins) {
@@ -300,14 +391,16 @@
     el.innerHTML = `${habits}${slow}<h3 class="sub-h">By section</h3>${sec}`;
   }
 
-  function renderMastery(ins) {
+  function renderMastery() {
     const el = $("#mastery");
-    const all = [...new Set([...WRB, ...NRB, ...MCB].map((q) => q.topic))];
-    const seen = new Map(ins.topics.map((t) => [t.topic, t]));
-    const rows = all.map((name) => seen.get(name) || { topic: name, pct: null }).sort((a, b) => (a.pct ?? 101) - (b.pct ?? 101));
-    el.innerHTML = `<div class="mastery-grid">${rows.map((t) => t.pct === null ? `
-      <div class="mastery-row unseen"><span class="m-name">${esc(t.topic)}</span><span class="m-bar"><span class="bar"></span></span><span class="m-val muted">not yet</span></div>` : `
-      <div class="mastery-row"><span class="m-name">${esc(t.topic)}</span><span class="m-bar"><span class="bar"><span class="bar-fill ${t.pct >= 85 ? "good" : t.pct >= 65 ? "mid" : "low"}" style="width:${t.pct}%"></span></span></span><span class="m-val"><b>${t.pct}%</b> <span class="level-pill ${window.Insights.level(t.pct)}">${window.Insights.levelLabel(t.pct)}</span></span></div>`).join("")}</div>`;
+    const { prof } = learningState();
+    const S = window.Learning.STATUS;
+    el.innerHTML = window.Concepts.UNITS.map((u) => `
+      <div class="mastery-unit"><h3 class="sub-h">${esc(u.title)}</h3><div class="mastery-grid">${window.Concepts.CONCEPTS.filter((c) => c.unit === u.id).map((c) => {
+        const p = prof[c.id], st = S[p.status];
+        const pc = p.accuracy === null ? null : Math.round(p.accuracy * 100);
+        return `<div class="mastery-row${pc === null ? " unseen" : ""}"><button class="m-name btn-inline" data-lesson="${c.id}" type="button">${esc(c.title)}</button><span class="m-bar"><span class="bar">${pc === null ? "" : `<span class="bar-fill ${st.tone === "good" ? "good" : st.tone === "low" ? "low" : "mid"}" style="width:${pc}%"></span>`}</span></span><span class="m-val">${pc === null ? "" : `<b>${pc}%</b>`} <span class="level-pill st-${st.tone}" title="${esc(window.Learning.explain(p))}">${esc(st.label)}</span></span></div>`;
+      }).join("")}</div></div>`).join("");
   }
 
   function renderHistory(h) {
@@ -413,6 +506,7 @@
       duration: minutes * 60,
       hardcore: fireOn && !!prefs.hardcore,
       drain: fireOn && !!prefs.drain && !scheduled, // a shared clock can't drain for one person
+      companion: fireOn && window.Companion ? (() => { const c = window.Companion.normalize(prefs.companion || window.Companion.full()); return c.any ? c : null; })() : null, // campfire on = full minigame unless customised
       gameOvers: 0, turnedOff: false,
     };
     saveSession();
@@ -450,6 +544,14 @@
     }
     if (location.hash === "#debug") window.__fire = fire;
     fire.onEvent = (kind) => { if (session && session.hardcore && !session.demo) showGameOver(kind); };
+    // Campfire Companion extras: only when chosen in Create test, never in the tour or with the campfire off
+    const compOn = session.companion && session.mode !== "off" && !session.demo && window.Companion;
+    if (compOn) {
+      fire.comp = new window.Companion.Companion(fire, { panel: $(".buddy-panel"), slot }, { config: session.companion, minutes: durOf(session) / 60, busy: () => !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("#q-body") && Date.now() - lastTyped < 6000) });
+      if (session.buddy && session.buddy.comp) fire.comp.restore(session.buddy.comp);
+    }
+    const ck = compOn ? [["vent", "V", "vent"], ["oxygen", "O", "bellows"], ["kettle", "K", "valve"], ["tent", "T", "tent"]].filter(([m]) => session.companion.mech[m]).map(([, k, t]) => `<kbd>${k}</kbd> ${t}`) : [];
+    $("#kbd-comp").innerHTML = ck.length ? " · " + ck.join(" · ") : "";
     $("#btn-fire-off").hidden = session.mode === "off" || !!session.demo;
 
     if (!pad && window.Scratchpad) {
@@ -457,6 +559,7 @@
       pad.onChange = () => { if (session && session.demo) return; clearTimeout(pad._saveT); pad._saveT = setTimeout(saveSession, 500); };
     }
 
+    if (pad) { pad.avoidLeft = !!(fire && fire.comp && fire.comp.on); if (pad._place) pad._place(); }
     renderQuestion();
     lastTick = Date.now();
     clearInterval(timerId);
@@ -535,7 +638,7 @@
 
   function saveSession() {
     if (!session || session.demo) return;
-    if (fire) session.buddy = { heat: fire.heat, status: fire.status, stats: { ...fire.stats } };
+    if (fire) session.buddy = { heat: fire.heat, status: fire.status, stats: { ...fire.stats }, comp: fire.comp ? fire.comp.state() : undefined };
     store.set(KEYS.session, session);
     lastSave = Date.now();
   }
@@ -826,7 +929,7 @@
 
     $("#results-eyebrow").textContent = fresh ? (attempt.timedOut ? "Time's up!" : "Test complete") : "Past test";
     $("#results-title").textContent = p >= 90 ? "Outstanding." : p >= 75 ? "Strong work." : p >= 60 ? "Solid — keep pushing." : p >= 40 ? "Good practice. Review below." : "Every test teaches something.";
-    $("#results-date").textContent = `${lvName} test · taken ${niceDate(attempt.date)}${attempt.pauses ? ` · paused ${attempt.pauses}×` : ""}${attempt.group ? ` · group ${attempt.group.code}` : ""}`;
+    $("#results-date").textContent = `${lvName}${levelOf(attempt) === "classmate" ? " (by Tim)" : ""} test · taken ${niceDate(attempt.date)}${attempt.pauses ? ` · paused ${attempt.pauses}×` : ""}${attempt.group ? ` · group ${attempt.group.code}` : ""}`;
 
     const banner = $("#best-banner");
     let html, kind = "info";
@@ -898,6 +1001,7 @@
         <div><span class="stat-value">${b.fires}</span><span class="stat-label">fires</span></div>
         <div><span class="stat-value">${b.freezes}</span><span class="stat-label">freezes</span></div>
       </div>
+      ${b.companion ? `<p class="small comp-report">Companion: ${b.companion.events} event${b.companion.events === 1 ? "" : "s"} weathered${b.companion.windShifts ? ` · ${b.companion.windShifts} wind shift${b.companion.windShifts === 1 ? "" : "s"}` : ""}${b.companion.lidPops ? ` · ${b.companion.lidPops} kettle pop${b.companion.lidPops === 1 ? "" : "s"}` : ""}${b.companion.hailHits ? ` · ${b.companion.hailHits} hail bump${b.companion.hailHits === 1 ? "" : "s"}` : ""}${b.companion.tentSeconds ? ` · ${b.companion.tentSeconds}s of puppy naps in the tent` : ""}.</p>` : ""}
       <p class="muted small">Mode: ${esc(window.Campfire.MODES[b.mode]?.label || b.mode)}. The buddy never affects your mark.</p>`}`;
 
     renderGroupBoard(attempt);
@@ -905,6 +1009,13 @@
     renderReview();
   }
 
+  function keyTeX(p) {
+    return p.kind === "choice" ? esc(p.answer)
+      : p.kind === "set" ? (p.answer.length ? tex(p.answer.map((x) => `x = ${Check.read(x).tex}`).join(",\\ ")) : tex("\\text{none}"))
+      : p.kind === "restriction" ? tex(Check.readRestriction(`x${p.answer.op}${p.answer.value}`).tex)
+      : p.kind === "number" ? tex(String(p.answer))
+      : tex(p.ansTex || Check.read(p.answer).tex);
+  }
   function answerTeX(raw, kind) {
     if (!String(raw || "").trim()) return `<span class="muted">(blank)</span>`;
     const r = kind === "set" ? Check.readSet(raw) : kind === "restriction" ? Check.readRestriction(raw) : Check.read(raw);
@@ -986,6 +1097,9 @@
               <p class="rubric-title">Marking key</p><ul class="rubric">${q.rubric.map((r) => `<li>${renderMath(r)}</li>`).join("")}</ul></div>
           </details>`;
       }
+      const cids = window.Concepts.conceptsFor(q);
+      const learnRow = `<div class="review-learn">${cids.map((c) => `<button class="btn btn-secondary btn-sm" data-lesson="${c}" type="button">Lesson: ${esc(window.Concepts.get(c).title)}</button>`).join("")}${it.earned < it.max ? `<button class="btn btn-primary btn-sm" data-explain="${i}" type="button">Explain my mistake</button>` : `<button class="btn btn-secondary btn-sm" data-explain="${i}" type="button">Ask the tutor</button>`}</div>`;
+      bodyHTML += learnRow;
       const sketch = it.sketch && it.sketch.length ? `<div class="sketch-review"><span class="cmp-label">Your scratch work</span><canvas data-sketch="${i}" aria-label="Your scratch work for ${L.text}"></canvas></div>` : "";
       bodyHTML = bodyHTML.replace(/<details class="explain"/, sketch + '<details class="explain"');
       return `${sectionHead}<article class="review-item ${status}">${head}${bodyHTML}</article>`;
@@ -1092,21 +1206,74 @@
     const d = $("#setup-dialog");
     const pick = (sel, attr, val) => { for (const b of $$(`${sel} button`)) { const on = b.dataset[attr] === String(val); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); } };
     pick("#s-level", "level", LEVELS[p.level] ? p.level : "normal");
-    pick("#s-buddy", "mode", p.buddyMode);
+    pick("#s-buddy", "mode", p.buddyMode === "off" ? "normal" : p.buddyMode);
+    $("#s-camp").checked = p.buddyMode !== "off";
+    $("#s-camp-custom").open = false;
     pick("#s-start", "start", 0);
     $("#s-time").value = p.minutes || 60;
     $("#s-hardcore").checked = !!p.hardcore;
     $("#s-drain").checked = !!p.drain;
     $("#s-group").checked = !!opts.group;
     $("#s-name").value = p.name || "";
+    if (window.Companion) {
+      // a campfire that's on but was never customised starts as the full minigame
+      const c = p.buddyMode !== "off" && p.companion ? window.Companion.normalize(p.companion) : window.Companion.normalize(window.Companion.full());
+      compDraft = { mech: { ...c.mech }, events: c.events, picked: [...c.picked] };
+      renderCompSetup();
+    }
     syncSetup();
     d.returnValue = "cancel";
     d.showModal();
   }
+  // ───────── Campfire minigame setup (inside Create test) ─────────
+  // One master switch: off = no campfire at all; on = the full minigame (every mechanic and event),
+  // with "Customize" for anyone who wants less. The two ends are what we steer people toward.
+  let compDraft = null;
+  const campMode = () => ($("#s-camp").checked ? activeVal("#s-buddy", "mode", "normal") : "off");
+  function onCampMaster() {
+    const on = $("#s-camp").checked;
+    if (on && window.Companion) { compDraft = window.Companion.full(); $("#s-hardcore").checked = false; $("#s-drain").checked = false; $("#s-camp-custom").open = false; }
+    renderCompSetup();
+    syncSetup();
+  }
+  function renderCompSetup() {
+    const CP = window.Companion;
+    if (!CP) { $("#s-comp").hidden = true; return; }
+    const c = CP.normalize(compDraft);
+    $("#s-comp-mech").innerHTML = CP.MECHANICS.map((m) => `<label class="cs-mech-row${c.mech[m.id] ? " on" : ""}"><input type="checkbox" data-mech="${m.id}" ${c.mech[m.id] ? "checked" : ""} /><span class="cs-ico" aria-hidden="true">${m.icon}</span><span class="cs-t"><b>${esc(m.name)}</b><small>${esc(m.desc)}</small></span></label>`).join("");
+    $("#s-comp-events").checked = c.events;
+    $("#s-comp-ev").hidden = !c.events;
+    const picked = new Set(c.picked);
+    const openCats = $$("#s-comp-list details").length ? new Set($$("#s-comp-list details[open]").map((d) => d.dataset.cat)) : new Set(["peaceful", "moderate"]);
+    $("#s-comp-list").innerHTML = CP.CATS.map(([cat, title]) => `<details class="cs-cat" data-cat="${cat}" ${openCats.has(cat) ? "open" : ""}><summary>${esc(title)} <span class="faint">${CP.EVENTS.filter((e) => e.cat === cat && c.active.includes(e.id)).length}/${CP.EVENTS.filter((e) => e.cat === cat).length}</span></summary>
+      ${CP.EVENTS.filter((e) => e.cat === cat).map((e) => { const blocked = e.needs && !c.mech[e.needs]; const needName = blocked ? CP.MECHANICS.find((m) => m.id === e.needs).name : ""; return `<label class="cs-ev-row${blocked ? " blocked" : ""}" ${blocked ? `title="Turn on ${esc(needName)} to use this event"` : ""}><input type="checkbox" data-ev="${e.id}" ${picked.has(e.id) && !blocked ? "checked" : ""} ${blocked ? "disabled" : ""} /><span class="cs-ico" aria-hidden="true">${e.icon}</span><span class="cs-t"><span class="cs-line"><b>${esc(e.name)}</b> <i class="cs-tag t-${e.tag.toLowerCase()}">${esc(e.tag)}</i></span><small>${esc(e.desc)}${blocked ? ` <em>Needs ${esc(needName)}.</em>` : ""}</small></span></label>`; }).join("")}</details>`).join("");
+    $("#s-comp-count").textContent = `${c.active.length} of ${CP.EVENTS.length} can happen`;
+    const full = CP.isFull(c);
+    $("#s-camp-full").classList.toggle("is-custom", !full);
+    $("#s-camp-reset").hidden = full;
+    $("#s-camp-full-text").textContent = full ? "Your puppy, the fire and every mechanic and event. The most fun way to play. Math still comes first: events never pause the test." : `Customized: ${CP.summary(c) || "classic campfire (heat and logs only)"}. The full set is the recommended way to play.`;
+    $("#s-camp-custom-sum").textContent = full ? "· everything on" : "· " + (CP.summary(c) || "heat and logs only");
+    for (const el of $$("#s-comp input, #s-comp button")) el.disabled = !!(el.dataset.ev && el.closest(".blocked"));
+    $("#s-comp-sum").textContent = c.any ? `Selected: ${CP.summary(c)}. Math comes first: events wait while you're typing an answer.` : "Classic campfire: just heat and logs.";
+  }
+  function onCompSetup(e) {
+    const CP = window.Companion;
+    const t = e.target;
+    if (t.dataset.mech) { compDraft.mech[t.dataset.mech] = t.checked; return renderCompSetup(); }
+    if (t.id === "s-comp-events") { compDraft.events = t.checked; return renderCompSetup(); }
+    if (t.dataset.ev) { const set = new Set(compDraft.picked); if (t.checked) set.add(t.dataset.ev); else set.delete(t.dataset.ev); compDraft.picked = [...set]; return renderCompSetup(); }
+    const tool = t.closest && t.closest("[data-cs]");
+    if (tool) {
+      if (tool.dataset.cs === "all") compDraft.picked = CP.EVENTS.map((x) => x.id);
+      if (tool.dataset.cs === "none") compDraft.picked = [];
+      if (tool.dataset.cs === "reset") compDraft = CP.full();
+      renderCompSetup();
+    }
+  }
   const activeVal = (sel, attr, dflt) => (($(`${sel} button.active`) || {}).dataset || {})[attr] ?? dflt;
   function syncSetup() {
     const level = activeVal("#s-level", "level", "normal");
-    const mode = activeVal("#s-buddy", "mode", "normal");
+    const mode = campMode();
     const group = $("#s-group").checked;
     const startMin = Number(activeVal("#s-start", "start", 0));
     const mins = Number($("#s-time").value);
@@ -1116,8 +1283,9 @@
     const fireOn = mode !== "off";
     $("#s-hardcore").disabled = !fireOn;
     $("#s-drain").disabled = !fireOn || (group && startMin > 0);
-    $("#s-fire-switches").classList.toggle("disabled", !fireOn);
-    $("#s-fire-note").textContent = !fireOn ? "Turn the campfire on to use these switches."
+    $("#s-camp-body").hidden = !fireOn;
+    $("#s-camp-hint").textContent = fireOn ? "On: a puppy and a campfire to look after while you work. Never affects your mark." : "Off: just you and the test. Best when you want to concentrate.";
+    $("#s-fire-note").textContent = !fireOn ? ""
       : group && startMin > 0 ? "Armadillo mode is off for shared-clock group tests, so everyone's clock stays in sync." : "";
     $("#s-group-options").hidden = !group;
     $("#s-start-hint").textContent = startMin
@@ -1128,11 +1296,11 @@
   }
   async function submitSetup() {
     const level = activeVal("#s-level", "level", "normal");
-    const buddyMode = activeVal("#s-buddy", "mode", "normal");
+    const buddyMode = campMode();
     const minutes = Number($("#s-time").value) || 60;
     const group = $("#s-group").checked;
     const name = $("#s-name").value.trim().slice(0, 18);
-    setPrefs({ level, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(group ? { name } : {}) });
+    setPrefs({ level, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
     if (group) {
       const startMin = Number(activeVal("#s-start", "start", 0));
       const seed = (crypto.getRandomValues(new Uint32Array(1))[0] & 0x7ffff) || 1;
@@ -1146,6 +1314,8 @@
   }
 
   function joinGroup(code) {
+    const room = window.Group.decodeRoom(code);
+    if (room && window.Rooms) { $("#join-error").textContent = ""; $("#join-code").value = ""; return window.Rooms.join(room); }
     const g = window.Group.decodeGroup(code);
     if (!g) { $("#join-error").textContent = "That code isn't valid — check it for typos."; return; }
     $("#join-error").textContent = "";
@@ -1266,7 +1436,7 @@
         onEnter: () => { if (pad) pad.open(); },
         html: `<p><b>Hold the left mouse button to write.</b> Try it now!</p><p>Drag the dark title bar to move it, pull the bottom-right corner to resize, use ⤢ to make it big, and – (or <kbd>N</kbd>) to tuck it away.</p><p>Each question gets its own page, and your scratch work shows up in the review.</p>`,
       },
-      { title: "You're ready", html: `<p><b>Basecamp</b> is home between tests. Press <b>Create test</b> to pick the level (Classmate's, Normal or Challenge), the time limit and campfire options, or make a <b>group test</b> to share with friends.</p><p>Basecamp also shows past results and which topics to practise next.</p><p class="muted small">You can replay this tour any time from <b>How to play</b>.</p>` },
+      { title: "You're ready", html: `<p><b>Basecamp</b> is home between tests. Press <b>Create test</b> to pick the level (Tim's Test, Normal or Challenge), the time limit and campfire options, or make a <b>group test</b> to share with friends.</p><p>Basecamp also shows past results and which topics to practise next.</p><p class="muted small">You can replay this tour any time from <b>How to play</b>.</p>` },
     ];
     for (const st of steps) st.html = renderMath(st.html);
     window.Tour.start(steps, {
@@ -1305,6 +1475,73 @@
     input.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  // ───────── context for the tutor: structured data for the page on screen ─────────
+  let tutorFocus = null; // a specific question the student asked about from the review
+  function explainMistake(i) {
+    const a = viewing, it = a.items[i], q = qOf(it);
+    if (!q) return;
+    const L = labelOf(i, a.items);
+    tutorFocus = { attemptId: a.id, label: L.text, ...questionForTutor(it, q) };
+    window.Tutor.open({ mode: "explain", prompt: it.earned < it.max ? `Why did I lose marks on ${L.text}?` : `Can you explain ${L.text}?`, send: true });
+  }
+  const plain = (html) => { const d = document.createElement("div"); d.innerHTML = String(html).replace(/\\\(|\\\)/g, " "); return (d.textContent || "").replace(/\s+/g, " ").trim(); };
+  const texPlain = (s) => String(s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); // keeps \( LaTeX \) for the model
+  function questionForTutor(it, q) {
+    if (it.kind === "mc") {
+      return { kind: "Multiple choice", question: texPlain(q.q), choices: it.order.map((o, k) => `${LETTERS[k]}. ${texPlain(q.c[o])}`), studentAnswer: it.chosen === null ? "(blank)" : `${LETTERS[it.order.indexOf(it.chosen)]}. ${texPlain(q.c[it.chosen])}`, verifiedAnswer: `${LETTERS[it.order.indexOf(0)]}. ${texPlain(q.c[0])}`, verifiedExplanation: texPlain(q.e), marks: `${it.earned}/${it.max}` };
+    }
+    if (it.kind === "nr") return { kind: "Numerical response", question: texPlain(q.q), studentAnswer: it.response || "(blank)", verifiedAnswer: String(q.answer), verifiedExplanation: texPlain(q.e), marks: `${it.earned}/${it.max}` };
+    const g = gradeItem(it);
+    return {
+      kind: "Written response", question: texPlain(q.intro), marks: `${it.earned}/${it.max}`,
+      parts: q.parts.map((p, k) => ({ part: p.label || p.key, prompt: texPlain(p.prompt), studentAnswer: it.responses[p.key] || "(blank)", verifiedAnswer: p.kind === "set" ? (p.answer.join(", ") || "none") : p.kind === "restriction" ? `x ${p.answer.op} ${p.answer.value}` : String(p.ansTex ? p.ansTex : p.answer), marks: `${g.parts[k].earned}/${g.parts[k].max}`, markerNote: g.parts[k].note || "" })),
+      verifiedSolution: q.solution.map(texPlain).join(" "), markingKey: q.rubric.map(texPlain),
+    };
+  }
+  function pageContext() {
+    const scr = document.body.dataset.screen;
+    if (scr === "library") return window.Library.context();
+    if (scr === "learning") return window.Analyst.context();
+    if (scr === "review") return window.Review.context();
+    if (scr === "room" && window.Rooms) return window.Rooms.context();
+    if (scr === "home") {
+      const L = learningState();
+      return {
+        type: "basecamp", title: "Basecamp (home dashboard)",
+        text: [plain($("#home-sub").innerHTML), "Recommendations shown: " + L.recs.filter((r) => r.status !== "not_attempted").slice(0, 3).map((r) => `${r.title} [${r.label}]: ${r.why}`).join(" | "), "Marking habits panel: " + plain($("#habits").innerHTML), "Stat tiles: " + plain($("#home-stats").innerHTML)].join("\n"),
+        concepts: L.recs.slice(0, 3).map((r) => r.concept),
+      };
+    }
+    if (scr === "results" && viewing) {
+      const a = viewing;
+      const lost = a.items.map((it, i) => ({ it, i })).filter((x) => x.it.earned < x.it.max).map(({ it, i }) => `${labelOf(i, a.items).text} (${(qOf(it) || {}).topic}): ${it.earned}/${it.max}`);
+      const ctx = { type: "results", title: `Test results and review (${LEVELS[levelOf(a)].label}, ${a.percent}%)`, text: `Mark ${a.earned}/${a.total}. Sections: ${SECTIONS.map((s) => `${s.name} ${a.sections[s.key].earned}/${a.sections[s.key].max}`).join(", ")}. Questions with lost marks: ${lost.join("; ") || "none"}.`, concepts: [] };
+      if (tutorFocus && tutorFocus.attemptId === a.id) { ctx.focus = tutorFocus; ctx.concepts = window.Concepts.conceptsFor(qOf(a.items.find((x, k) => labelOf(k, a.items).text === tutorFocus.label))); }
+      return ctx;
+    }
+    // Fallback: readable text of the visible screen only
+    const el = document.querySelector(`#screen-${scr}`);
+    return { type: scr || "page", title: document.title, text: el ? (el.innerText || "").slice(0, 4000) : "" };
+  }
+
+  const API = {
+    $, $$, esc, tex, renderMath, show, store, KEYS, getHistory, qOf, gradeItem, LEVELS, levelOf, shuffle, clock, dur, niceDate,
+    Check, confirmDialog, partHTML, answerTeX, keyTeX, insertAtCursor, updatePreview, LETTERS, isAssessmentActive, assessmentState, discardSaved, resumeSaved: () => resumeTest(), learningState, pageContext, go: navigate, plain, texPlain,
+    BANKS, MC: () => [...MCB, ...CM.mc], NR: () => [...NRB, ...CM.nr], CHMC: () => CHM, CHNR: () => CHN,
+    setTutorFocus: (f) => { tutorFocus = f; },
+    openSheet, closeSheet, copyText, getPrefs,
+  };
+
+  // A modal sheet for detail views (evidence inspector). Closes on Esc, the × button or a backdrop click.
+  function openSheet(title, html) {
+    const d = $("#sheet");
+    $("#sheet-title").textContent = title;
+    $("#sheet-body").innerHTML = html;
+    if (!d.open) d.showModal();
+    $("#sheet-close").focus();
+  }
+  function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
+
   function init() {
     if (!MCB || !NRB || !WRB || !Check) { document.body.innerHTML = "<p style='padding:2rem'>The question bank failed to load.</p>"; return; }
 
@@ -1324,6 +1561,10 @@
       });
     }
     for (const id of ["#s-time", "#s-group", "#s-hardcore", "#s-drain"]) $(id).addEventListener("input", syncSetup);
+    $("#s-comp").addEventListener("change", onCompSetup);
+    $("#s-camp").addEventListener("change", onCampMaster);
+    $("#s-camp-reset").addEventListener("click", () => { compDraft = window.Companion.full(); renderCompSetup(); });
+    $("#s-comp").addEventListener("click", (e) => { if (e.target.closest("[data-cs]")) onCompSetup(e); });
     $("#setup-dialog").addEventListener("close", () => { if ($("#setup-dialog").returnValue === "ok") submitSetup(); });
     $("#btn-create").addEventListener("click", () => openSetup());
     $("#lobby-buddy").addEventListener("click", (e) => {
@@ -1373,6 +1614,7 @@
       if (ins) insertAtCursor(ins.closest(".wr-part").querySelector("input"), ins.dataset.ins);
     });
     body.addEventListener("input", onInput);
+    body.addEventListener("input", () => { lastTyped = Date.now(); });
     body.addEventListener("mousedown", (e) => { if (e.target.closest("[data-ins]")) e.preventDefault(); });
 
     $("#nav-grid").addEventListener("click", (e) => { const b = e.target.closest(".nav-cell"); if (b) go(Number(b.dataset.i)); });
@@ -1415,21 +1657,48 @@
       if (e.key === "ArrowRight") { e.preventDefault(); go(session.current + 1); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); go(session.current - 1); }
       else if (k === "f" && fire) { e.preventDefault(); fire.addFuel(); }
+      else if (fire && fire.comp && fire.comp.key(k)) { e.preventDefault(); }
       else if (k === "n" && pad) { e.preventDefault(); pad.toggleMin(); }
       else if (k === "p") { e.preventDefault(); pauseTest(); }
+    });
+
+    // Shared links: data-go / data-lesson / data-quiz / data-explain anywhere in the app
+    document.addEventListener("click", (e) => {
+      const g = e.target.closest("[data-go]");
+      if (g && !e.target.closest("#tutor")) { e.preventDefault(); return navigate(g.dataset.go); }
+      const l = e.target.closest("[data-lesson]");
+      if (l) { e.preventDefault(); return navigate("library", l.dataset.lesson); }
+      const qz = e.target.closest("[data-quiz]");
+      if (qz) { e.preventDefault(); if (session) return; show("library"); return window.Library.open(qz.dataset.quiz, { quiz: true }); }
+      const ex = e.target.closest("[data-explain]");
+      if (ex && viewing) { e.preventDefault(); return explainMistake(Number(ex.dataset.explain)); }
     });
 
     window.addEventListener("pagehide", saveSession);
     document.addEventListener("visibilitychange", () => { if (document.hidden) saveSession(); });
     // Invite links look like  …/#g-XXXXXXXXXXXX
     const fromHash = () => {
+      const cm = location.hash.match(/^#c-([a-z]+\.[a-z_]+)$/);
+      if (cm && window.Concepts.get(cm[1]) && !session) { navigate("library", cm[1]); return true; }
       const m = location.hash.match(/^#g-([0-9A-Za-z]{12})$/);
       const g = m && window.Group.decodeGroup(m[1]);
       if (g && !session) { openLobby(g); return true; }
+      const rm = location.hash.match(/^#r-([0-9A-Za-z]{16})$/);
+      const room = rm && window.Group.decodeRoom(rm[1]);
+      if (room && !session && window.Rooms) { window.Rooms.join(room); return true; }
       return false;
     };
     window.addEventListener("hashchange", fromHash);
+    window.Practice.init(API);
+    window.Library.init(API);
+    window.Review.init(API);
+    if (window.Rooms) window.Rooms.init(API);
+    $("#sheet-close").addEventListener("click", closeSheet);
+    $("#sheet").addEventListener("click", (e) => { if (e.target === $("#sheet")) closeSheet(); });
+    window.Analyst.init(API);
+    window.Tutor.init(API);
     if (!fromHash()) renderTitle();
+    setInterval(() => window.Tutor.refresh(), 1000); // belt-and-braces: hide the tutor the moment a test exists
   }
 
   document.addEventListener("DOMContentLoaded", init);
