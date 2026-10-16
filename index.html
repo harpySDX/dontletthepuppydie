@@ -206,7 +206,7 @@
       </nav>
       <div class="topbar-test" id="topbar-test" hidden>
         <div class="tb-progress">
-          <div class="tb-progress-text"><span id="q-counter">Written Response · Q1 of 5</span><span id="answered-counter">0/20 answered</span></div>
+          <div class="tb-progress-text"><span class="tb-level" id="tb-level" hidden></span><span id="q-counter">Written Response · Q1 of 5</span><span id="answered-counter">0/20 answered</span></div>
           <div class="seg-bar" id="seg-bar" aria-hidden="true"></div>
         </div>
         <div class="timer" id="timer" aria-live="off"><span class="timer-label">Time left</span><span class="timer-value" id="timer-value">60:00</span><span class="drain-badge" id="drain-badge" hidden>×2</span></div>
@@ -264,6 +264,7 @@
                 <button type="button" role="tab" data-level="classmate">Tim's</button>
                 <button type="button" role="tab" data-level="normal">Normal</button>
                 <button type="button" role="tab" data-level="challenge">Challenge</button>
+                <button type="button" role="tab" data-level="nightmare">Nightmare</button>
               </div>
             </div>
             <div class="stat-tiles" id="home-stats"></div>
@@ -643,8 +644,14 @@
           <button type="button" role="radio" data-level="classmate">Tim's Test</button>
           <button type="button" role="radio" data-level="normal">Normal</button>
           <button type="button" role="radio" data-level="challenge">Challenge</button>
+          <button type="button" role="radio" data-level="nightmare" class="nm-level">Nightmare</button>
         </div>
         <span class="field-hint" id="s-level-hint"></span>
+        <div class="nm-pick" id="s-nm" role="radiogroup" aria-labelledby="s-nm-label" hidden>
+          <span class="field-label" id="s-nm-label">Choose your Nightmare <span class="nm-req">required</span></span>
+          <div class="nm-cards" id="s-nm-cards"></div>
+          <p class="form-error" id="s-nm-error" role="alert"></p>
+        </div>
       </div>
 
       <div class="setup-section">
@@ -794,6 +801,7 @@
   <script src="js/group.js" defer></script>
   <script src="js/campfire.js" defer></script>
   <script src="js/companion.js" defer></script>
+  <script src="js/nightmare.js" defer></script>
   <script src="js/scratchpad.js" defer></script>
   <script src="js/insights.js" defer></script>
   <script src="js/concepts.js" defer></script>

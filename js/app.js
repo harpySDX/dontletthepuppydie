@@ -36,12 +36,24 @@
     nr: new Map([...NRB, ...CHN, ...CM.nr].map((q) => [q.id, q])),
     wr: new Map([...WRB, ...CHW, ...CM.wr].map((q) => [q.id, q])),
   };
+  // Nightmare questions are generated; their id is enough to rebuild them exactly (saved tests, review, history)
+  for (const m of Object.values(BANKS)) {
+    const get = m.get.bind(m), has = m.has.bind(m);
+    m.get = (id) => { let q = get(id); if (!q && window.Nightmare && /^nm-/.test(id || "")) { q = window.Nightmare.byId(id); if (q) m.set(id, q); } return q; };
+    m.has = (id) => has(id) || !!m.get(id);
+  }
   const LEVELS = {
     classmate: { label: "Tim's Test", short: "Tim's", hint: "A practice test written by Tim, credited with thanks: the same 20 questions every time. Your teacher says it's a bit softer than the real test." },
     normal: { label: "Normal", short: "Normal", hint: "Unit-test level, laid out like the real thing. Fresh questions every time." },
     challenge: { label: "Challenge", short: "Challenge", hint: "Much harder than the real test: nested radicals, cube-root conjugates, double squaring. A lower mark here is normal." },
+    nightmare1: { label: "Nightmare I — Brutal", short: "Nightmare I", hint: "Generated and checked fresh each time. Dense exponent laws, big radicands with variables, like radicals and binomial rationalizing.", nightmare: 1 },
+    nightmare2: { label: "Nightmare II — Extreme", short: "Nightmare II", hint: "Nested radicals, conjugates with coefficients, cube-root denominators, double-radical equations and error analysis.", nightmare: 2 },
+    nightmare3: { label: "Nightmare III — Catastrophic", short: "Nightmare III", hint: "Multi-layer boss questions: rational-power products, nested radicals and ugly conjugates chained together.", nightmare: 3 },
   };
   const levelOf = (a) => (a && a.level) || "normal";
+  const nmTier = (lv) => (window.Nightmare ? window.Nightmare.tierOf(lv) : null);
+  // Harder-than-the-test levels: kept out of accuracy, recommendations and the notebook (they'd skew them)
+  const isHard = (lv) => lv === "challenge" || !!nmTier(lv);
   const LETTERS = ["A", "B", "C", "D", "E", "F"];
   const Check = window.MathCheck;
 
@@ -64,8 +76,9 @@
     return `<code>${esc(t)}</code>`;
   }
   function renderMath(str) {
-    return String(str).split(/(\\\([\s\S]*?\\\))/).map((part) =>
-      part.startsWith("\\(") && part.endsWith("\\)") ? tex(part.slice(2, -2)) : part).join("");
+    return String(str).split(/(\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/).map((part) =>
+      part.startsWith("\\(") && part.endsWith("\\)") ? tex(part.slice(2, -2))
+        : part.startsWith("\\[") && part.endsWith("\\]") ? `<span class="math-display">${tex(part.slice(2, -2), true)}</span>` : part).join("");
   }
   function shuffle(arr, rnd = Math.random) {
     const a = arr.slice();
@@ -116,7 +129,7 @@
   // Challenge evidence is included but kept separate by the mastery model: it can add variety and
   // "harder questions right", but never lowers accuracy (it's much harder than the real test).
   function learningState() {
-    const histAll = getHistory().map((a) => ({ ...a, level: levelOf(a) }));
+    const histAll = getHistory().map((a) => ({ ...a, level: isHard(levelOf(a)) ? "challenge" : levelOf(a) }));
     const practice = store.get(KEYS.practice, []);
     const allRecords = window.Learning.buildEvidence(histAll, practice, { qOf, gradeParts: (it) => gradeItem(it).parts, conceptsFor: window.Concepts.conceptsFor });
     // Blank answers only count as evidence (and as notebook mistakes) when the test was a genuine
@@ -225,7 +238,7 @@
     const lv = LEVELS[prefs.level] ? prefs.level : "normal";
     const analyze = (h) => window.Insights.analyze(h, qOf, (it) => gradeItem(it).parts);
     // Topic advice ignores Challenge tests so they don't drag your mastery down
-    const core = analyze(history.filter((a) => levelOf(a) !== "challenge"));
+    const core = analyze(history.filter((a) => !isHard(levelOf(a))));
     const atLevel = analyze(history.filter((a) => levelOf(a) === lv));
     const all = analyze(history);
 
@@ -266,7 +279,7 @@
       fireOn && prefs.drain ? `<span class="on">Armadillo mode</span>` : "",
       fireOn && window.Companion && window.Companion.summary(prefs.companion || window.Companion.full()) ? `<span class="on">${esc(window.Companion.summary(prefs.companion || window.Companion.full()))}</span>` : "",
     ].join("");
-    for (const b of $$("#level-pick button")) { const on = b.dataset.level === lv; b.classList.toggle("active", on); b.setAttribute("aria-checked", on); }
+    for (const b of $$("#level-pick button")) { const on = b.dataset.level === lv || (b.dataset.level === "nightmare" && !!nmTier(lv)); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); }
     document.querySelector(".launch-card").dataset.level = prefs.level;
 
     // Greeting
@@ -458,6 +471,12 @@
   const mcItem = (q, rnd = Math.random) => ({ kind: "mc", qid: q.id, order: q.order ? q.order.slice() : shuffle(q.c.map((_, i) => i), rnd), chosen: null, time: 0, flagged: false });
   // rnd is seeded for group tests, so every device builds the identical test
   function buildTest(level = "normal", rnd = Math.random) {
+    const tier = nmTier(level);
+    if (tier) {
+      const t = window.Nightmare.build(tier, rnd);
+      for (const q of [...t.wr, ...t.nr, ...t.mc]) BANKS[q.parts ? "wr" : q.c ? "mc" : "nr"].set(q.id, q);
+      return [...t.wr.map(wrItem), ...t.nr.map(nrItem), ...t.mc.map((q) => mcItem(q, rnd))];
+    }
     if (level === "classmate") return [...CM.wr.map(wrItem), ...CM.nr.map(nrItem), ...CM.mc.map((q) => mcItem(q))];
     const wr = level === "challenge" ? CHW : WRB, nr = level === "challenge" ? CHN : NRB, mc = level === "challenge" ? CHM : MCB;
     const items = [];
@@ -491,6 +510,7 @@
     const now = Date.now();
     const g = opts.group || null;
     const level = g ? g.level : opts.level || getPrefs().level;
+    if (!LEVELS[level]) { if (/^nightmare/.test(level || "")) return openSetup({ nightmare: true }); return startTest({ ...opts, level: "normal" }); }
     const scheduled = !!(g && g.start);
     const prefs = getPrefs();
     const minutes = g ? g.minutes || 60 : opts.minutes || prefs.minutes || 60;
@@ -526,6 +546,9 @@
   function enterTest() {
     show("test");
     document.body.classList.toggle("buddy-off", session.mode === "off");
+    const tier = nmTier(session.level);
+    $("#tb-level").hidden = !tier;
+    if (tier) { $("#tb-level").textContent = `☠ ${window.Nightmare.TIERS[tier].name} · ${window.Nightmare.TIERS[tier].label}`; $("#tb-level").dataset.tier = tier; }
     // A scheduled group test shares one clock, so it can't be paused
     $("#btn-pause").hidden = !!(session.group && session.group.scheduled);
     $("#seg-bar").innerHTML = SECTIONS.map((s) => `<span class="seg" style="flex:${s.count}" title="${s.name}"><span class="seg-fill" data-sec="${s.key}"></span></span>`).join("");
@@ -1013,7 +1036,7 @@
     return p.kind === "choice" ? esc(p.answer)
       : p.kind === "set" ? (p.answer.length ? tex(p.answer.map((x) => `x = ${Check.read(x).tex}`).join(",\\ ")) : tex("\\text{none}"))
       : p.kind === "restriction" ? tex(Check.readRestriction(`x${p.answer.op}${p.answer.value}`).tex)
-      : p.kind === "number" ? tex(String(p.answer))
+      : p.kind === "number" ? tex(p.ansTex || String(p.answer))
       : tex(p.ansTex || Check.read(p.answer).tex);
   }
   function answerTeX(raw, kind) {
@@ -1062,7 +1085,8 @@
           const tag = orig === 0 && orig === it.chosen ? "Your answer ✓" : orig === 0 ? "Correct answer" : orig === it.chosen ? "Your answer" : "";
           return `<li class="${cls}"><span class="choice-letter">${LETTERS[di]}</span><span class="choice-body">${renderMath(q.c[orig])}</span>${tag ? `<span class="choice-tag">${tag}</span>` : ""}</li>`;
         }).join("");
-        bodyHTML = `<div class="q-text">${renderMath(q.q)}</div><ul class="review-choices">${choices}</ul>
+        const slip = it.chosen !== null && it.chosen !== 0 && q.why && q.why[it.chosen] ? `<p class="part-note">Likely slip: ${renderMath(q.why[it.chosen])}</p>` : "";
+        bodyHTML = `<div class="q-text">${renderMath(q.q)}</div><ul class="review-choices">${choices}</ul>${slip}
           <details class="explain"${status !== "right" ? " open" : ""}><summary>How to solve it</summary><div>${renderMath(q.e)}</div></details>`;
       } else if (it.kind === "nr") {
         const ok = it.earned >= 1;
@@ -1201,11 +1225,33 @@
   }
 
   // ───────── Create test (setup dialog) ─────────
+  // ───────── Nightmare tier picker (must be chosen explicitly) ─────────
+  let nmDraft = null;
+  function renderNmCards() {
+    const NM = window.Nightmare;
+    if (!NM) return;
+    $("#s-nm-cards").innerHTML = [1, 2, 3].map((t) => {
+      const T = NM.TIERS[t];
+      let preview = "";
+      try { const q = NM.generate(t, "mc", "exp", ((x) => () => ((x = (x * 16807) % 2147483647) / 2147483647))(97 + t)); const m = /\\\[([\s\S]*)\\\]/.exec(q.q); preview = m ? tex(m[1], true) : ""; } catch { preview = ""; }
+      const on = nmDraft === t;
+      return `<button type="button" role="radio" class="nm-card t${t}${on ? " active" : ""}" data-tier="${t}" aria-checked="${on}">
+        <span class="nm-head"><b>${esc(T.name)}</b><span class="nm-badge">${esc(T.label)}</span><span class="nm-skulls" aria-hidden="true">${"☠".repeat(t)}</span></span>
+        <span class="nm-desc">${esc(T.desc)}</span>
+        <span class="nm-skills">${esc(T.skills)}</span>
+        ${preview ? `<span class="nm-preview" aria-hidden="true"><span class="nm-preview-k">Sample</span>${preview}</span>` : ""}
+      </button>`;
+    }).join("");
+  }
   function openSetup(opts = {}) {
     const p = getPrefs();
     const d = $("#setup-dialog");
     const pick = (sel, attr, val) => { for (const b of $$(`${sel} button`)) { const on = b.dataset[attr] === String(val); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); } };
-    pick("#s-level", "level", LEVELS[p.level] ? p.level : "normal");
+    // a saved Nightmare tier is kept (that's the app's normal preference pattern); otherwise none is pre-selected
+    nmDraft = nmTier(p.level);
+    pick("#s-level", "level", nmDraft || opts.nightmare ? "nightmare" : LEVELS[p.level] ? p.level : "normal");
+    renderNmCards();
+    $("#s-nm-error").textContent = "";
     pick("#s-buddy", "mode", p.buddyMode === "off" ? "normal" : p.buddyMode);
     $("#s-camp").checked = p.buddyMode !== "off";
     $("#s-camp-custom").open = false;
@@ -1272,14 +1318,20 @@
   }
   const activeVal = (sel, attr, dflt) => (($(`${sel} button.active`) || {}).dataset || {})[attr] ?? dflt;
   function syncSetup() {
-    const level = activeVal("#s-level", "level", "normal");
+    const picked = activeVal("#s-level", "level", "normal");
+    const isNm = picked === "nightmare";
+    const level = isNm ? (nmDraft ? `nightmare${nmDraft}` : null) : picked;
+    $("#s-nm").hidden = !isNm;
+    for (const b of $$("#s-nm-cards .nm-card")) { const on = Number(b.dataset.tier) === nmDraft; b.classList.toggle("active", on); b.setAttribute("aria-checked", String(on)); }
+    $("#s-group").disabled = isNm;
+    if (isNm && $("#s-group").checked) $("#s-group").checked = false;
     const mode = campMode();
     const group = $("#s-group").checked;
     const startMin = Number(activeVal("#s-start", "start", 0));
     const mins = Number($("#s-time").value);
     $("#s-time-out").textContent = `${mins} min`;
     $("#s-time").style.setProperty("--fill", `${((mins - 10) / 110) * 100}%`);
-    $("#s-level-hint").textContent = LEVELS[level].hint;
+    $("#s-level-hint").textContent = level ? LEVELS[level].hint : "Pick Nightmare I, II or III below to continue. Nightmare runs solo (group codes don't carry it yet).";
     const fireOn = mode !== "off";
     $("#s-hardcore").disabled = !fireOn;
     $("#s-drain").disabled = !fireOn || (group && startMin > 0);
@@ -1291,16 +1343,20 @@
     $("#s-start-hint").textContent = startMin
       ? `Everyone starts together in ${startMin} minutes and finishes at the same moment. Pause is off so the clocks stay in sync.`
       : "Each person's clock starts when they press Start, and Pause still works.";
-    $("#s-go").textContent = group ? "Create group test" : "Start test";
+    $("#s-go").textContent = group ? "Create group test" : isNm && nmDraft ? `Start ${window.Nightmare.TIERS[nmDraft].name}` : "Start test";
+    $("#s-go").disabled = isNm && !nmDraft;
     $("#setup-title").textContent = group ? "Create a group test" : "Create test";
   }
   async function submitSetup() {
-    const level = activeVal("#s-level", "level", "normal");
+    const picked = activeVal("#s-level", "level", "normal");
+    if (picked === "nightmare" && !nmDraft) { $("#s-nm-error").textContent = "Choose Nightmare I, II or III first."; $("#setup-dialog").showModal(); return; }
+    const level = picked === "nightmare" ? `nightmare${nmDraft}` : picked;
+    if (!LEVELS[level]) return;
     const buddyMode = campMode();
     const minutes = Number($("#s-time").value) || 60;
     const group = $("#s-group").checked;
     const name = $("#s-name").value.trim().slice(0, 18);
-    setPrefs({ level, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
+    setPrefs({ level, ...(nmTier(level) ? { lastNightmare: level } : {}), buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
     if (group) {
       const startMin = Number(activeVal("#s-start", "start", 0));
       const seed = (crypto.getRandomValues(new Uint32Array(1))[0] & 0x7ffff) || 1;
@@ -1546,16 +1602,26 @@
     if (!MCB || !NRB || !WRB || !Check) { document.body.innerHTML = "<p style='padding:2rem'>The question bank failed to load.</p>"; return; }
 
     $("#btn-enter").addEventListener("click", () => (store.get(KEYS.toured, false) ? goHome() : startTour()));
-    for (const b of $$("#level-pick button")) b.addEventListener("click", () => { setPrefs({ level: b.dataset.level }); renderHome(); });
+    for (const b of $$("#level-pick button")) b.addEventListener("click", () => {
+      if (b.dataset.level === "nightmare") {
+        // Nightmare needs an explicit tier: reuse the last one chosen, otherwise ask in Create test
+        const last = getPrefs().lastNightmare;
+        if (nmTier(last)) { setPrefs({ level: last }); renderHome(); } else openSetup({ nightmare: true });
+        return;
+      }
+      setPrefs({ level: b.dataset.level }); renderHome();
+    });
     $("#btn-group-create").addEventListener("click", () => openSetup({ group: true }));
     $("#join-form").addEventListener("submit", (e) => { e.preventDefault(); joinGroup($("#join-code").value); });
     $("#btn-lobby-start").addEventListener("click", startFromLobby);
     $("#btn-lobby-leave").addEventListener("click", leaveLobby);
     $("#btn-copy-code").addEventListener("click", () => copyText($("#lobby-code").textContent, null, $("#copy-note")));
     $("#btn-copy-link").addEventListener("click", () => copyText($("#lobby-link").value, $("#lobby-link"), $("#copy-note")));
+    $("#s-nm-cards").addEventListener("click", (e) => { const c = e.target.closest("[data-tier]"); if (!c) return; nmDraft = Number(c.dataset.tier); $("#s-nm-error").textContent = ""; syncSetup(); });
     for (const grp of ["#s-level", "#s-buddy", "#s-start"]) {
       $(grp).addEventListener("click", (e) => {
         const b = e.target.closest("button"); if (!b) return;
+        if (grp === "#s-level" && b.dataset.level !== "nightmare") nmDraft = null; // leaving Nightmare clears the tier
         for (const x of $$(`${grp} button`)) { x.classList.toggle("active", x === b); x.setAttribute("aria-checked", x === b); }
         syncSetup();
       });

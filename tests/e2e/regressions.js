@@ -218,6 +218,61 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   await c1.click("#btn-fire-off"); await c1.waitForTimeout(150); await c1.click("#dialog-ok"); await c1.waitForTimeout(300);
   ok("Turning the campfire off removes the companion completely", !(await vis(c1, "#companion")) && (await c1.evaluate(() => window.__fire.comp)) === null);
 
+  // ── Nightmare mode: explicit tier, persisted through reload, shown in the test bar and results
+  const n1 = await mk((process.env.BASE || "http://localhost:8766/"));
+  await n1.click("#btn-create"); await n1.waitForTimeout(250);
+  await n1.click('#s-level [data-level="nightmare"]'); await n1.waitForTimeout(150);
+  ok("Nightmare: three tier cards shown, none preselected", (await n1.locator("#s-nm [data-tier]").count()) === 3 && (await n1.locator("#s-nm [data-tier].active").count()) === 0);
+  ok("Nightmare: Start disabled until a tier is picked", await n1.isDisabled("#s-go"));
+  await n1.evaluate(() => document.querySelector("#setup-dialog").close("ok")); await n1.waitForTimeout(200); // force a submit past the disabled button
+  ok("Nightmare: forcing a submit without a tier does not start a test; it asks for a tier", !(await vis(n1, "#screen-test")) && await vis(n1, "#setup-dialog") && /Choose Nightmare/.test(await n1.textContent("#s-nm-error")));
+  ok("Nightmare: group option is off for Nightmare", await n1.isDisabled("#s-group"));
+  ok("Nightmare: campfire companion not switched on by Nightmare", !(await n1.isChecked("#s-camp")));
+  await n1.click('[data-tier="3"]'); await n1.waitForTimeout(100);
+  ok("Nightmare: Start names the tier", /Nightmare III/.test(await n1.textContent("#s-go")) && !(await n1.isDisabled("#s-go")));
+  await n1.click('#s-level [data-level="challenge"]'); await n1.waitForTimeout(100);
+  await n1.click('#s-level [data-level="nightmare"]'); await n1.waitForTimeout(100);
+  ok("Nightmare: switching away clears the tier", (await n1.locator("#s-nm [data-tier].active").count()) === 0 && await n1.isDisabled("#s-go"));
+  for (const tier of [1, 2]) { await n1.click(`[data-tier="${tier}"]`); await n1.waitForTimeout(60); }
+  await n1.click("#s-go"); await n1.waitForTimeout(700);
+  ok("Nightmare II: test starts with the tier chip", await vis(n1, "#screen-test") && /Nightmare II · Extreme/.test(await n1.textContent("#tb-level")));
+  const nmIds = await n1.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2") || "{}"));
+  const flat = JSON.stringify(nmIds);
+  ok("Nightmare: saved test stores the tier level and generated ids", /nightmare2/.test(flat) && /nm-\d+-2-/.test(flat));
+  ok("Nightmare: tutor hidden during the test", !(await vis(n1, "#tutor-launcher")));
+  // answer the first MC with a distractor
+  const firstMc = await n1.evaluate(() => [...document.querySelectorAll("#nav-grid .nav-cell")].length);
+  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[10].click()); await n1.waitForTimeout(250);
+  const mcText = await n1.textContent("#q-body");
+  await n1.click('#q-body .choice[data-orig="1"]'); await n1.waitForTimeout(150);
+  await n1.click("#btn-pause"); await n1.waitForTimeout(200);
+  await n1.reload(); await n1.waitForTimeout(700); if (await vis(n1, "#btn-enter")) await n1.click("#btn-enter");
+  await n1.click("#btn-resume").catch(() => {}); await n1.waitForTimeout(400); if (await vis(n1, "#btn-unpause")) await n1.click("#btn-unpause");
+  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[10].click()); await n1.waitForTimeout(250);
+  ok("Nightmare: reload restores the same generated question and answer", (await n1.textContent("#q-body")).replace(/\s+/g, " ") === mcText.replace(/\s+/g, " ") && (await n1.locator('#q-body .choice.selected[data-orig="1"]').count()) === 1, `${firstMc} cells`);
+  ok("Nightmare: tier chip survives reload", /Nightmare II/.test(await n1.textContent("#tb-level")));
+  ok("Nightmare: display math renders (no raw \\[ in questions)", !/\\\[/.test(await n1.textContent("#q-body")));
+  await n1.click("#btn-submit"); await n1.click("#dialog-ok"); await n1.waitForTimeout(900);
+  ok("Nightmare: results name the tier", /Nightmare II — Extreme/.test(await n1.textContent("#results-date")));
+  ok("Nightmare: review shows the likely slip for the wrong choice", (await n1.locator("#review-list .part-note", { hasText: "Likely slip" }).count()) >= 1);
+  await n1.screenshot({ path: "30-nightmare-results.png", fullPage: true });
+  for (const [tier, name] of [[1, "Nightmare I · Brutal"], [3, "Nightmare III · Catastrophic"]]) {
+    if (await vis(n1, "#btn-home")) await n1.click("#btn-home"); await n1.waitForTimeout(300);
+    await n1.click("#btn-create"); await n1.waitForTimeout(250);
+    await n1.click('#s-level [data-level="nightmare"]'); await n1.click(`[data-tier="${tier}"]`); await n1.click("#s-go"); await n1.waitForTimeout(300);
+    if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(600); // "Start over?" — the previous one was only quit
+    ok(`Nightmare ${"I".repeat(tier)}: starts with its own chip and 20 generated questions`, (await n1.textContent("#tb-level")) === "☠ " + name && (await n1.locator("#nav-grid .nav-cell").count()) === 20);
+    await n1.click("#btn-quit"); await n1.waitForTimeout(200); if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(300);
+  }
+  // Basecamp: the Nightmare tab reuses the last tier; Standard still works
+  if (await vis(n1, "#btn-home")) await n1.click("#btn-home"); await n1.waitForTimeout(400);
+  if (await vis(n1, '#level-pick [data-level="nightmare"]')) { await n1.click('#level-pick [data-level="nightmare"]'); await n1.waitForTimeout(300); ok("Basecamp: Nightmare tab shows the last tier without a dialog", !(await vis(n1, "#setup-dialog")) && (await n1.locator('#level-pick [data-level="nightmare"].active, #level-pick [data-level="nightmare"][aria-selected="true"]').count()) === 1); }
+  await n1.click("#btn-create"); await n1.waitForTimeout(250);
+  await n1.click('#s-level [data-level="normal"]'); await n1.waitForTimeout(100);
+  ok("Standard: Nightmare cards hidden and Start enabled", !(await vis(n1, "#s-nm")) && !(await n1.isDisabled("#s-go")) && !(await n1.isDisabled("#s-group")));
+  await n1.click("#s-go"); await n1.waitForTimeout(300); if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(600);
+  ok("Standard: test starts without a Nightmare chip", await vis(n1, "#screen-test") && !(await vis(n1, "#tb-level")) && !/nm-/.test(await n1.evaluate(() => localStorage.getItem("campfire-prep.session.v2") || "")));
+
   ok("No JS errors", errors.length === 0, errors.join(" | "));
   await b.close();
   console.log(`\n${results.filter((r) => r.pass).length}/${results.length} passed`);

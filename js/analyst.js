@@ -212,7 +212,7 @@
   function inspect(id) {
     const L = A.learningState(), c = C().get(id), p = L.prof[id], st = S()[p.status];
     const src = { test: "Practice test", quiz: "Concept quiz", review: "Daily review", room: "Study room" };
-    const qText = (r) => { const k = A.BANKS.mc.has(r.qid) ? "mc" : A.BANKS.nr.has(r.qid) ? "nr" : "wr"; const q = A.BANKS[k].get(r.qid); if (!q) return r.qid; const t = k === "wr" ? q.title + (r.part ? ` (${r.part})` : "") : A.texPlain(q.q).replace(/\\\(|\\\)/g, ""); return t.length > 70 ? t.slice(0, 68) + "…" : t; };
+    const qText = (r) => { const k = A.BANKS.mc.has(r.qid) ? "mc" : A.BANKS.nr.has(r.qid) ? "nr" : "wr"; const q = A.BANKS[k].get(r.qid); if (!q) return r.qid; const t = k === "wr" ? q.title + (r.part ? ` (${r.part})` : "") : A.texPlain(q.q).replace(/\\\(|\\\)|\\\[|\\\]/g, " ").replace(/\s+/g, " ").trim(); return t.length > 70 ? t.slice(0, 68) + "…" : t; };
     const ms = L.mistakes.filter((m) => m.concepts.includes(id));
     A.openSheet(c.title, `
       <div class="insp-top"><span class="level-pill st-${st.tone}">${A.esc(st.label)}</span><p>${A.esc(window.Learning.explain(p))}</p></div>

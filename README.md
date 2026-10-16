@@ -9,7 +9,7 @@ A 60-minute, **34-mark** Pre-Calculus 11 practice test, laid out like the radica
 | **Multiple Choice** | 10 | radicals, conjugates, factoring, number sets (natural → real), exponent laws, find-the-student's-mistake, multiple ways to simplify, perimeter/area/side length |
 
 - **Create test** opens a setup screen with:
-  - **Level:** *Tim's Test* (a fixed practice test written by our classmate Tim, a bit softer than the real one), *Normal* (unit-test level) or *Challenge* (much harder)
+  - **Level:** *Tim's Test* (a fixed practice test written by our classmate Tim, a bit softer than the real one), *Normal* (unit-test level), *Challenge* (much harder) or *Nightmare*, which has three tiers you must pick from: I — Brutal, II — Extreme, III — Catastrophic. Nightmare questions are freshly generated and exactly verified every time (see [`docs/NIGHTMARE.md`](docs/NIGHTMARE.md))
   - a **time slider** from 10 to 120 min (default 60)
   - **campfire mode**
   - **Puppy can lose:** a burn or freeze is game over for the campfire, but you can always keep going with the test
@@ -177,6 +177,7 @@ js/companion.js     Campfire Companion: optional mechanics, event scheduler, com
 js/scratchpad.js    floating drawing pad (one page per question)
 js/bank-classmate.js Tim's Test (fixed practice test, credited to Tim)
 js/bank-challenge.js Challenge-level banks
+js/nightmare.js     Nightmare generator: tiered templates, exact arithmetic, verified keys
 js/group.js         group-test and study-room codes, seeded shuffles, result codes
 js/insights.js      Basecamp analysis: topic mastery, habits, trends
 js/tour.js          guided-tour spotlight
@@ -200,8 +201,9 @@ docs/               architecture and engineering notes
 ## Tests
 
 ```bash
-npm test                     # 46 unit tests: concepts, mastery, spaced repetition, notebook, exam plan, room codes, campfire companion, API (AI mocked)
+npm test                     # 64 unit tests: concepts, mastery, spaced repetition, notebook, exam plan, room codes, campfire companion, Nightmare generator, API (AI mocked)
+NM_SEEDS=1000 node --test tests/nightmare.test.js   # stress the Nightmare templates with more seeds
 node tests/e2e/devserver.js  # local server with a MOCKED tutor on :8766
 MOCK_OFF=1 PORT=8767 node tests/e2e/devserver.js   # same, with no key (for the "not connected" check)
-npm run test:e2e             # 124 Playwright browser checks (needs Playwright + Chromium installed)
+npm run test:e2e             # 148 Playwright browser checks (needs Playwright + Chromium installed)
 ```

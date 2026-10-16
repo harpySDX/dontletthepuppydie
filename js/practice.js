@@ -91,6 +91,7 @@
     const lesson = item.concepts[0];
     return `<div class="quiz-fb ${ans.correct ? "ok" : "bad"}" role="status">
       <p class="fb-title"><b>${ans.correct ? "Correct." : ans.blank ? "No answer." : item.kind === "wr" && ans.earned > 0 ? "Partly right." : "Not quite."}</b>${ans.note ? ` <span class="fb-note">${A.esc(ans.note)}</span>` : ""}</p>
+      ${!ans.correct && item.kind === "mc" && q.why && q.why[ans.choice] ? `<p class="fb-note">Likely slip: ${A.renderMath(q.why[ans.choice])}</p>` : ""}
       ${key}${why}
       <div class="quiz-fb-actions">
         ${opts.tutor !== false ? `<button class="btn btn-quiet btn-sm" data-pr="explain" type="button">✦ Explain with the tutor</button>` : ""}

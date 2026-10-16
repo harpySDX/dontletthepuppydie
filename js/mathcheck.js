@@ -374,6 +374,10 @@
 
     const form = spec.form || "simplest";
     if (form === "value") return { earned: max, max, verdict: "right", note: "" };
+    // a decimal typed to many places can land inside the equality tolerance; it is still not the exact value
+    if (/\d\.\d/.test(String(response)) && !hasRoot(r.tree) && !/π|pi/i.test(String(response)) && hasExactPart(spec.answer)) {
+      return { earned: Math.max(0, max - 1), max, verdict: max > 1 ? "partial" : "wrong", note: "That's a decimal approximation — the question wants the exact value." };
+    }
     if (form === "entire") {
       return isEntire(r.tree)
         ? { earned: max, max, verdict: "right", note: "" }
