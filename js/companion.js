@@ -12,18 +12,31 @@
  *   • every event is announced, wind shifts are telegraphed with a grace period (never under 6 s)
  *   • events never push heat past 92 on their own; severe events only start when the fire is in a safe range
  *   • if the student is typing an answer, a new event waits (up to 45 s) until they pause
- *   • the puppy can't be lost: at 0 HP it shelters in the tent and recovers
+ *   • hail can't take the puppy: at 0 HP it shelters in the tent and recovers
+ *   • the kettle (after an announced countdown) and running out of oxygen DO end the round, through Campfire.die()
  * The simulation only runs inside the existing campfire loop, so pausing, game over, turning the campfire
  * off or leaving the test stops it — there are no separate timers to leak.
  */
 (function () {
   "use strict";
 
+  // ───────── hazard tuning: the ONE place to change how fast the kettle and oxygen become dangerous ─────────
+  // Kettle pressure rises with the fire's heat: (heat − startHeat) × baseRate × speedup × modeMul per second.
+  // speedup 1.18 = 18 % faster than the original baseline; Chill's modeMul cancels it, so Chill keeps the original pace.
+  // At 100 % pressure a blowout countdown starts (announced, with the valve still usable); if it runs out, the
+  // kettle blows and the round ends through Campfire.die("kettle").
+  const TUNING = {
+    kettle: { startHeat: 35, baseRate: 0.006, speedup: 1.18, modeMul: { normal: 1, chill: 1 / 1.18 }, coolRate: 0.15, warnAt: 70, dangerAt: 85, blowSeconds: { normal: 8, chill: 12 }, afterRecover: 30 },
+    oxygen: { rest: 85, failAt: 0, criticalAt: 15, lowAt: 35, afterRecover: 85 },
+  };
+  const kettleRate = (mode) => TUNING.kettle.baseRate * TUNING.kettle.speedup * (TUNING.kettle.modeMul[mode] || 1);
+  const blowSeconds = (mode) => TUNING.kettle.blowSeconds[mode] || TUNING.kettle.blowSeconds.normal;
+
   // ───────── catalog (also drives the Create test UI) ─────────
   const MECHANICS = [
     { id: "vent", icon: "♨", name: "Vent", desc: "Open the vent to let extra heat out; close it once the fire is back in the green." },
-    { id: "oxygen", icon: "◌", name: "Oxygen & bellows", desc: "Usually steady. Storms thin the air; low oxygen makes logs weaker. Pump the bellows." },
-    { id: "kettle", icon: "☕", name: "Kettle", desc: "Builds pressure as the fire heats. The valve lets steam (and a little heat) out. Ignore it and the lid pops. Harmless!" },
+    { id: "oxygen", icon: "◌", name: "Oxygen & bellows", desc: "Usually steady. Storms thin the air; low oxygen makes logs weaker. Pump the bellows: if it runs out, the fire smothers the camp." },
+    { id: "kettle", icon: "☕", name: "Kettle", desc: "Builds pressure as the fire heats. The valve lets steam (and a little heat) out. Leave it at full pressure and it blows after a warning countdown." },
     { id: "wind", icon: "🧭", name: "Wind & compass", desc: "Point the ventilation the way the wind blows. A mismatch heats the fire faster. Shifts are announced first." },
     { id: "tent", icon: "⛺", name: "Puppy & tent", desc: "Your puppy has 10 hearts and can rest in the tent to recover, but you can't tend the fire while it's inside." },
   ];
@@ -35,7 +48,7 @@
     { id: "rogue", cat: "moderate", icon: "↻", name: "Rogue wind", desc: "The wind changes twice in quick succession, then settles.", tag: "Action", needs: "wind", def: true },
     { id: "frenzy", cat: "moderate", icon: "≋", name: "Wind frenzy", desc: "Shifts come more often, with shorter (but fair) warnings.", tag: "Action", needs: "wind", def: false },
     { id: "surge", cat: "moderate", icon: "▲", name: "Heat surge", desc: "The fire gets hotter on its own. Open the vent, then close it.", tag: "Action", needs: "vent", def: true },
-    { id: "rattle", cat: "moderate", icon: "☕", name: "Kettle rattle", desc: "Pressure jumps toward the top. Use the valve before the lid pops.", tag: "Action", needs: "kettle", def: true },
+    { id: "rattle", cat: "moderate", icon: "☕", name: "Kettle rattle", desc: "Pressure jumps toward the top. Use the valve before it blows.", tag: "Action", needs: "kettle", def: true },
     { id: "gust", cat: "moderate", icon: "✺", name: "Ember gust", desc: "A short flare of heat. Venting helps.", tag: "Fire", def: true },
     { id: "rainbreak", cat: "moderate", icon: "☼", name: "Rain break", desc: "Weather calms for a bit: steady air, slower cooling. A breather.", tag: "Fire", def: true },
     { id: "fog", cat: "moderate", icon: "≡", name: "Thick fog", desc: "The campsite goes misty. Meters stay readable.", tag: "Cosmetic", def: true },
@@ -160,14 +173,23 @@
       const ev = s.major && s.major.phase === "on" ? s.major.id : null;
 
       if (this.has("oxygen")) {
+        const O = TUNING.oxygen;
         const drain = ev === "rain" ? 0.5 : ev === "blizzard" ? 0.9 : ev === "whiteout" ? 1.3 : 0;
-        s.oxygen = drain ? clamp(s.oxygen - drain * dt, 0, 100) : s.oxygen + clamp(85 - s.oxygen, -0.5, 0.5) * dt * (ev === "rainbreak" ? 3 : 1);
+        const before = s.oxygen;
+        s.oxygen = drain ? clamp(s.oxygen - drain * dt, 0, 100) : s.oxygen + clamp(O.rest - s.oxygen, -0.5, 0.5) * dt * (ev === "rainbreak" ? 3 : 1);
+        if (before >= O.criticalAt && s.oxygen < O.criticalAt) this.notify("◌ Oxygen critical! Pump the bellows or the fire will smother.", "danger");
+        // the real threshold (clamped exactly to 0), checked on the value itself, not on the rounded meter
+        if (s.oxygen <= O.failAt) { s.oxygen = 0; if (f.die("oxygen")) { this.notify("The fire ran out of oxygen.", "danger"); return; } }
       }
       if (this.has("kettle")) {
-        const h = f.heat;
+        const T = TUNING.kettle, h = f.heat;
         const boost = ev === "rattle" ? 2.2 : 1;
-        s.pressure = clamp(s.pressure + (h > 35 ? (h - 35) * 0.006 * boost : -0.15) * dt, 0, 100);
-        if (s.pressure >= 100) { s.lidT += dt; if (s.lidT > 4) this._lidPop(); } else s.lidT = 0;
+        s.pressure = clamp(s.pressure + (h > T.startHeat ? (h - T.startHeat) * kettleRate(f.mode) * boost : -T.coolRate) * dt, 0, 100);
+        if (s.pressure >= 100) {
+          if (s.lidT === 0) this.notify(`☕ The kettle is about to blow! Use the valve (K) within ${blowSeconds(f.mode)} seconds.`, "danger", blowSeconds(f.mode));
+          s.lidT += dt;
+          if (s.lidT >= blowSeconds(f.mode)) { this._blowout(); return; }
+        } else s.lidT = 0;
       }
       if (this.has("tent")) {
         if (s.inTent) {
@@ -317,12 +339,21 @@
       const t = { rain: "The rain eases off.", frenzy: "The wind calms down.", surge: "The surge has passed. Close the vent if it's open.", blizzard: "The blizzard blows over.", whiteout: "The whiteout clears.", hail: "The hail stops. Safe to come out.", fog: "The fog lifts.", rainbreak: "The break is over." }[id];
       if (t) this.notify(t, "");
     }
-    _lidPop() {
+    // The kettle blows: the round ends through the campfire's single terminal-state path.
+    _blowout() {
       const s = this.s;
-      s.pressure = 35; s.lidT = 0; s.lidPops++;
+      if (this.fire.status !== "ok") return;
+      s.lidT = 0; s.lidPops++;
       const sc = this.els.scene;
       if (sc) { sc.classList.remove("kettle-pop"); void sc.getBoundingClientRect(); sc.classList.add("kettle-pop"); clearTimeout(this._popT); this._popT = setTimeout(() => sc.classList.remove("kettle-pop"), 1600); }
-      this.notify("Pop! The kettle lid flew off in a puff of steam. Harmless; it's back on and warming again.", "");
+      if (this.fire.die("kettle")) this.notify("💥 The kettle blew!", "danger");
+    }
+    // After Thaw/Rebuild/Relight or "Keep going": hazards start from a safe place so the round can't end again at once.
+    recover() {
+      const s = this.s;
+      s.pressure = Math.min(s.pressure, TUNING.kettle.afterRecover); s.lidT = 0;
+      s.oxygen = Math.max(s.oxygen, TUNING.oxygen.afterRecover);
+      this.render(true);
     }
     _puff() {
       const sc = this.els.scene;
@@ -425,8 +456,8 @@
         row.dataset.level = level;
         const st = row.querySelector(".cm-state"); if (st.textContent !== state) st.textContent = state;
       };
-      if (this.has("oxygen")) setMeter("oxygen", s.oxygen, s.oxygen < 15 ? "Critical" : s.oxygen < 35 ? "Low" : s.oxygen < 55 ? "Thinning" : "Steady", s.oxygen < 15 ? "danger" : s.oxygen < 35 ? "warn" : "ok");
-      if (this.has("kettle")) setMeter("pressure", s.pressure, s.pressure >= 100 ? "About to pop!" : s.pressure >= 85 ? "Hissing!" : s.pressure >= 70 ? "Rattling" : s.pressure >= 30 ? "Ready" : "Warming", s.pressure >= 85 ? "danger" : s.pressure >= 70 ? "warn" : "ok");
+      if (this.has("oxygen")) setMeter("oxygen", s.oxygen, s.oxygen <= 0 ? "Out" : s.oxygen < 15 ? "Critical" : s.oxygen < 35 ? "Low" : s.oxygen < 55 ? "Thinning" : "Steady", s.oxygen < 15 ? "danger" : s.oxygen < 35 ? "warn" : "ok");
+      if (this.has("kettle")) setMeter("pressure", s.pressure, s.pressure >= 100 ? `Blows in ${Math.max(1, Math.ceil(blowSeconds(f.mode) - s.lidT))} s!` : s.pressure >= TUNING.kettle.dangerAt ? "Hissing!" : s.pressure >= TUNING.kettle.warnAt ? "Rattling" : s.pressure >= 30 ? "Ready" : "Warming", s.pressure >= TUNING.kettle.dangerAt ? "danger" : s.pressure >= TUNING.kettle.warnAt ? "warn" : "ok");
       if (this.has("tent")) {
         const hp = Math.round(s.hp * 10) / 10, full = Math.floor(hp);
         const h = q(".hearts");
@@ -475,5 +506,5 @@
     }
   }
 
-  window.Companion = { Companion, MECHANICS, EVENTS, CATS, defaults, full, isFull, normalize, summary, esc };
+  window.Companion = { Companion, TUNING, kettleRate, blowSeconds, MECHANICS, EVENTS, CATS, defaults, full, isFull, normalize, summary, esc };
 })();

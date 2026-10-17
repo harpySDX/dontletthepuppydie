@@ -14,7 +14,8 @@
 
   const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32 (no I, L, O, U)
   const EPOCH = Date.UTC(2026, 0, 1);
-  const LEVELS = ["normal", "challenge", "classmate"];
+  // index 2 was Tim's Test (retired); old codes with it still decode, so the app can explain they're outdated
+  const LEVELS = ["normal", "challenge", "classmate", "nightmare"];
 
   const mask = (seed) => Math.imul(seed, 2654435761) >>> 5 & 0x7ffffff;
 
@@ -100,10 +101,11 @@
   // and the tutor are allowed, and a seed. Everyone with the code builds the identical set.
   const COUNTS = [5, 8, 10, 12], PACES = [60, 90, 120, 180];
   function roomChecksum(n) { let s = 0n; for (let i = 0; i < 15; i++) { s += (n & 31n) * BigInt(i + 1); n >>= 5n; } return s % 32n; }
-  function encodeRoom({ concepts, count = 8, synced = false, pace = 90, hints = true, seed, start = 0 }) {
+  // version 3 = a room over the original 16 concepts; version 2 = a room over the Quadratic Functions concepts
+  function encodeRoom({ concepts, count = 8, synced = false, pace = 90, hints = true, seed, start = 0, subject = "pc11" }) {
     const startMin = synced && start ? Math.max(1, Math.round((start - EPOCH) / 60000)) : 0;
     seed &= 0x7ffff;
-    let n = 3n;                                                     // version 3 = room (2 bits)
+    let n = subject === "quad" ? 2n : 3n;                           // version (2 bits): 3 = original concepts, 2 = quadratics
     n = (n << 1n) | (hints ? 1n : 0n);                              // hints (1)
     n = (n << 1n) | (synced ? 1n : 0n);                             // synced (1)
     n = (n << 2n) | BigInt(Math.max(0, PACES.indexOf(pace)));       // seconds per question (2)
@@ -132,8 +134,8 @@
     const synced = ((body >> 66n) & 1n) === 1n;
     const hints = ((body >> 67n) & 1n) === 1n;
     const ver = Number(body >> 68n);
-    if (ver !== 3 || !conceptMask) return null;
-    return { code: `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}-${c.slice(12)}`, mask: conceptMask, count, pace, synced, hints, seed, start: synced && startMin ? EPOCH + startMin * 60000 : 0 };
+    if ((ver !== 3 && ver !== 2) || !conceptMask) return null;
+    return { code: `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}-${c.slice(12)}`, mask: conceptMask, count, pace, synced, hints, seed, start: synced && startMin ? EPOCH + startMin * 60000 : 0, subject: ver === 2 ? "quad" : "pc11" };
   }
   // Room result: name + one character per question (1 right, 0 wrong, - unanswered). Nothing else.
   function encodeRoomResult({ room, name, marks }) {

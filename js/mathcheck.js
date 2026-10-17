@@ -47,6 +47,7 @@
     const peek = () => toks[p];
     const eat = (k) => {
       const t = toks[p];
+      if (t && t.k === "," && k === ")") throw new Error("This answer is a single number, not a point: leave out the comma.");
       if (!t || t.k !== k) throw new Error(k === ")" ? "Missing a closing bracket )" : `Expected "${k}"`);
       p++;
       return t;
@@ -309,6 +310,10 @@
    * Returns { earned, max, verdict: "right"|"partial"|"wrong"|"blank", note }
    */
   function grade(spec, response) {
+    // quadratic answer kinds (points, equations, plotted parabolas) live in quad-engine.js
+    if (root.QuadCheck && root.QuadCheck.handles(spec.kind)) return root.QuadCheck.grade(spec, response);
+    // curriculum-wide kinds (polynomials/rational expressions, exponent expressions, intervals, decimals, built graphs)
+    if (root.AnswerCheck && root.AnswerCheck.handles(spec.kind)) return root.AnswerCheck.grade(spec, response);
     const max = spec.marks || 1;
     const blank = response === undefined || response === null || String(response).trim() === "";
     if (blank) return { earned: 0, max, verdict: "blank", note: "No answer." };

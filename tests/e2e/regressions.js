@@ -5,6 +5,17 @@ const ok = (n, c, x = "") => { results.push({ n, pass: !!c }); console.log((c ? 
 const vis = (p, s) => p.locator(s).first().isVisible().catch(() => false);
 // Create test: switch the campfire minigame on (if needed) and open "Customize"
 const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check("#s-camp", { force: true }); await p.evaluate(() => { document.querySelector("#s-camp-custom").open = true; }); await p.waitForTimeout(100); };
+// island navigation: Home · Practice · Concepts · Study Room
+const navTo = async (p, where) => {
+  if ((await p.getAttribute("#brand-link", "aria-expanded")) !== "true") { await p.click("#brand-link"); await p.waitForTimeout(120); }
+  await p.click(`#main-nav [data-go="${where}"]`); await p.waitForTimeout(300);
+};
+// "Options…" for a test mode lives in that mode's preview on Home; previewing starts nothing
+const create = async (p, level = "normal") => {
+  if (!(await vis(p, "#screen-home"))) await navTo(p, "home");
+  await p.click(`#mode-track [data-mode="${level}"]`); await p.waitForTimeout(150);
+  await p.click("#btn-create"); await p.waitForTimeout(300);
+};
 (async () => {
   const b = await chromium.launch();
   const mk = async (base) => {
@@ -12,7 +23,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
     const p = await ctx.newPage();
     p.on("pageerror", (e) => errors.push(e.message));
     p.on("console", (m) => { if (m.type() === "error" && !/ERR_TUNNEL|favicon|503/.test(m.text())) errors.push(m.text()); });
-    await p.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); sessionStorage.setItem("i", 1); } });
+    await p.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
     await p.goto(base); await p.click("#btn-enter"); await p.waitForTimeout(300); return p;
   };
   // not configured
@@ -24,7 +35,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
 
   // group test + armadillo + hardcore
   p = await mk((process.env.BASE || "http://localhost:8766/"));
-  await p.click("#btn-create"); await p.waitForTimeout(300);
+  await create(p);
   await p.check("#s-group", { force: true }); await p.fill("#s-name", "Aubrey");
   await p.click("#s-go"); await p.waitForTimeout(500);
   ok("Group: lobby shown with code", await vis(p, "#screen-lobby") && /\w{4}/.test(await p.textContent("#lobby-code")));
@@ -41,8 +52,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
 
   // Armadillo + hardcore
   await p.evaluate(() => { localStorage.removeItem("campfire-prep.session.v2"); });
-  await p.click("#brand-link").catch(() => {}); await p.waitForTimeout(300);
-  await p.click("#btn-create"); await p.waitForTimeout(300);
+  await create(p);
   if (await p.isChecked("#s-group")) await p.uncheck("#s-group", { force: true });
   await campOn(p);
   await p.check("#s-hardcore", { force: true }); await p.check("#s-drain", { force: true });
@@ -64,7 +74,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   ok("Expired saved test doesn't lock the tutor", await p.evaluate(() => !document.querySelector("#tutor").classList.contains("locked")));
   await p.evaluate(() => localStorage.removeItem("campfire-prep.session.v2"));
   // ── "Puppy can lose": overfeed the fire until the camp burns, then continue the test
-  await p.click("#btn-create"); await p.waitForTimeout(300);
+  await create(p);
   if (await p.isChecked("#s-group")) await p.uncheck("#s-group", { force: true });
   await campOn(p);
   await p.check("#s-hardcore", { force: true }); if (await p.isChecked("#s-drain")) await p.uncheck("#s-drain", { force: true });
@@ -81,6 +91,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   // ── Study rooms: self-paced, two people, result codes, refresh
   const BASE = process.env.BASE || "http://localhost:8766/";
   const host = await mk(BASE);
+  await navTo(host, "studyroom");
   await host.click("#btn-room-create"); await host.waitForTimeout(300);
   await host.check('[data-rc="radicals.rationalize"]'); await host.click('#rc-count [data-count="5"]');
   await host.fill("#room-name-in", "Host"); await host.click("#rc-go"); await host.waitForTimeout(500);
@@ -122,9 +133,9 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   const s3 = await ctx3.newPage();
   s3.on("pageerror", (e) => errors.push(e.message));
   await s3.clock.install({ time: new Date("2026-10-20T15:00:10") });
-  await s3.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); sessionStorage.setItem("i", 1); } });
+  await s3.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
   await s3.goto(BASE); await s3.click("#btn-enter"); await s3.waitForTimeout(200);
-  await s3.click("#btn-room-create"); await s3.check('[data-rc="exponents.laws"]'); await s3.check('[data-rc="exponents.negative"]');
+  await navTo(s3, "studyroom"); await s3.click("#btn-room-create"); await s3.check('[data-rc="exponents.laws"]'); await s3.check('[data-rc="exponents.negative"]');
   await s3.click('#rc-pace-mode [data-mode="synced"]'); await s3.click('#rc-pace [data-pace="60"]'); await s3.click('#rc-start [data-start="1"]'); await s3.click('#rc-count [data-count="5"]');
   await s3.uncheck("#rc-hints", { force: true }); await s3.click("#rc-go"); await s3.waitForTimeout(300);
   ok("Synced room: countdown before start", await vis(s3, "#room-cd"));
@@ -144,9 +155,9 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   const cc = await b.newContext({ viewport: { width: 1440, height: 900 } });
   const c1 = await cc.newPage();
   c1.on("pageerror", (e) => errors.push(e.message));
-  await c1.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); sessionStorage.setItem("i", 1); } });
+  await c1.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
   await c1.goto(BASE + "#debug"); await c1.click("#btn-enter"); await c1.waitForTimeout(200);
-  await c1.click("#btn-create"); await c1.waitForTimeout(200);
+  await create(c1);
   ok("Master switch: the campfire minigame is off by default", !(await c1.isChecked("#s-camp")) && !(await vis(c1, "#s-camp-body")));
   await c1.check("#s-camp", { force: true }); await c1.waitForTimeout(150);
   ok("Switching it on selects the full minigame: every mechanic and every event", (await c1.$$eval("#s-comp-mech input", (els) => els.filter((e) => e.checked).length)) === 5 && await c1.isChecked("#s-comp-events") && /15 of 15/.test(await c1.textContent("#s-comp-count")));
@@ -162,8 +173,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   ok("Minigame off: no campfire, no puppy, no companion during the test", !(await vis(c1, ".buddy-panel")) && !(await vis(c1, "#companion")) && (await c1.evaluate(() => window.__fire && window.__fire.comp)) === null);
   await c1.click("#btn-quit"); await c1.waitForTimeout(200); if (await vis(c1, "#dialog")) await c1.click("#dialog-ok"); await c1.waitForTimeout(300);
   await c1.evaluate(() => localStorage.removeItem("campfire-prep.session.v2"));
-  await c1.click("#brand-link").catch(() => {}); await c1.waitForTimeout(200);
-  await c1.click("#btn-create"); await c1.waitForTimeout(200);
+  await create(c1);
   await campOn(c1);
   for (const m of ["vent", "oxygen", "kettle", "wind", "tent"]) await c1.uncheck(`[data-mech="${m}"]`);
   await c1.uncheck("#s-comp-events", { force: true });
@@ -171,8 +181,7 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   ok("Customized down to nothing: the classic campfire, unchanged", await vis(c1, ".buddy-panel") && !(await vis(c1, "#companion")) && (await c1.locator("#test-scene .scene.has-companion").count()) === 0 && (await c1.evaluate(() => window.__fire && window.__fire.comp)) === null);
   await c1.click("#btn-quit"); await c1.waitForTimeout(200); if (await vis(c1, "#dialog")) await c1.click("#dialog-ok"); await c1.waitForTimeout(300);
   await c1.evaluate(() => localStorage.removeItem("campfire-prep.session.v2"));
-  await c1.click("#brand-link").catch(() => {}); await c1.waitForTimeout(200);
-  await c1.click("#btn-create"); await c1.waitForTimeout(200);
+  await create(c1);
   await campOn(c1);
   await c1.check('[data-mech="vent"]'); await c1.check('[data-mech="tent"]'); await c1.check('[data-mech="wind"]');
   await c1.check("#s-comp-events", { force: true }); await c1.waitForTimeout(100);
@@ -218,60 +227,47 @@ const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check
   await c1.click("#btn-fire-off"); await c1.waitForTimeout(150); await c1.click("#dialog-ok"); await c1.waitForTimeout(300);
   ok("Turning the campfire off removes the companion completely", !(await vis(c1, "#companion")) && (await c1.evaluate(() => window.__fire.comp)) === null);
 
-  // ── Nightmare mode: explicit tier, persisted through reload, shown in the test bar and results
+  // ── Nightmare: one overhauled mode (no tiers), a 5-stage gauntlet; persisted through reload
   const n1 = await mk((process.env.BASE || "http://localhost:8766/"));
-  await n1.click("#btn-create"); await n1.waitForTimeout(250);
-  await n1.click('#s-level [data-level="nightmare"]'); await n1.waitForTimeout(150);
-  ok("Nightmare: three tier cards shown, none preselected", (await n1.locator("#s-nm [data-tier]").count()) === 3 && (await n1.locator("#s-nm [data-tier].active").count()) === 0);
-  ok("Nightmare: Start disabled until a tier is picked", await n1.isDisabled("#s-go"));
-  await n1.evaluate(() => document.querySelector("#setup-dialog").close("ok")); await n1.waitForTimeout(200); // force a submit past the disabled button
-  ok("Nightmare: forcing a submit without a tier does not start a test; it asks for a tier", !(await vis(n1, "#screen-test")) && await vis(n1, "#setup-dialog") && /Choose Nightmare/.test(await n1.textContent("#s-nm-error")));
-  ok("Nightmare: group option is off for Nightmare", await n1.isDisabled("#s-group"));
+  await create(n1, "nightmare");
+  ok("Nightmare: Options opens with Nightmare selected and no tier picker", (await n1.locator('#s-level [data-level="nightmare"][aria-checked="true"], #s-level [data-level="nightmare"].active').count()) === 1 && (await n1.locator("[data-tier]").count()) === 0);
+  ok("Setup offers exactly Normal, Challenging, Nightmare (no Tim's Test)", (await n1.$$eval("#s-level [data-level]", (els) => els.map((e) => e.dataset.level).join(","))) === "normal,challenge,nightmare");
   ok("Nightmare: campfire companion not switched on by Nightmare", !(await n1.isChecked("#s-camp")));
-  await n1.click('[data-tier="3"]'); await n1.waitForTimeout(100);
-  ok("Nightmare: Start names the tier", /Nightmare III/.test(await n1.textContent("#s-go")) && !(await n1.isDisabled("#s-go")));
-  await n1.click('#s-level [data-level="challenge"]'); await n1.waitForTimeout(100);
-  await n1.click('#s-level [data-level="nightmare"]'); await n1.waitForTimeout(100);
-  ok("Nightmare: switching away clears the tier", (await n1.locator("#s-nm [data-tier].active").count()) === 0 && await n1.isDisabled("#s-go"));
-  for (const tier of [1, 2]) { await n1.click(`[data-tier="${tier}"]`); await n1.waitForTimeout(60); }
   await n1.click("#s-go"); await n1.waitForTimeout(700);
-  ok("Nightmare II: test starts with the tier chip", await vis(n1, "#screen-test") && /Nightmare II · Extreme/.test(await n1.textContent("#tb-level")));
-  const nmIds = await n1.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2") || "{}"));
-  const flat = JSON.stringify(nmIds);
-  ok("Nightmare: saved test stores the tier level and generated ids", /nightmare2/.test(flat) && /nm-\d+-2-/.test(flat));
+  ok("Nightmare: test starts with the Nightmare chip and 5 stages", await vis(n1, "#screen-test") && /Nightmare/.test(await n1.textContent("#tb-level")) && (await n1.locator("#nav-grid .nav-cell").count()) === 5);
+  const nmS = await n1.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2") || "{}"));
+  ok("Nightmare: saved test stores level and generated quadratics ids", nmS.level === "nightmare" && nmS.subject === "quadratics" && nmS.items.every((i) => /^qd-.*-x-/.test(i.qid)), nmS.items.map((i) => i.qid).join(" "));
+  ok("Nightmare: no hints", await n1.isDisabled("#btn-hint"));
   ok("Nightmare: tutor hidden during the test", !(await vis(n1, "#tutor-launcher")));
-  // answer the first MC with a distractor
-  const firstMc = await n1.evaluate(() => [...document.querySelectorAll("#nav-grid .nav-cell")].length);
-  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[10].click()); await n1.waitForTimeout(250);
-  const mcText = await n1.textContent("#q-body");
-  await n1.click('#q-body .choice[data-orig="1"]'); await n1.waitForTimeout(150);
+  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[1].click()); await n1.waitForTimeout(250);
+  await n1.locator("#q-body input.answer-input").first().fill("(3, -2)"); await n1.waitForTimeout(150);
+  const stText = await n1.textContent("#q-body");
   await n1.click("#btn-pause"); await n1.waitForTimeout(200);
   await n1.reload(); await n1.waitForTimeout(700); if (await vis(n1, "#btn-enter")) await n1.click("#btn-enter");
-  await n1.click("#btn-resume").catch(() => {}); await n1.waitForTimeout(400); if (await vis(n1, "#btn-unpause")) await n1.click("#btn-unpause");
-  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[10].click()); await n1.waitForTimeout(250);
-  ok("Nightmare: reload restores the same generated question and answer", (await n1.textContent("#q-body")).replace(/\s+/g, " ") === mcText.replace(/\s+/g, " ") && (await n1.locator('#q-body .choice.selected[data-orig="1"]').count()) === 1, `${firstMc} cells`);
-  ok("Nightmare: tier chip survives reload", /Nightmare II/.test(await n1.textContent("#tb-level")));
+  await n1.click("#btn-resume").catch(() => {}); await n1.waitForTimeout(400);
+  if (!(await vis(n1, "#screen-test"))) { const rb = n1.locator("#resume-box button").first(); if (await rb.count()) { await rb.click(); await n1.waitForTimeout(500); } }
+  if (await vis(n1, "#btn-unpause")) await n1.click("#btn-unpause");
+  await n1.evaluate(() => document.querySelectorAll("#nav-grid .nav-cell")[1].click()); await n1.waitForTimeout(250);
+  ok("Nightmare: reload restores the same generated stage and your typed answer", (await n1.textContent("#q-body")).replace(/\s+/g, " ") === stText.replace(/\s+/g, " ") && (await n1.locator("#q-body input.answer-input").first().inputValue()) === "(3, -2)", JSON.stringify([await n1.locator("#q-body input.answer-input").first().inputValue(), (await n1.textContent("#q-body")).replace(/\s+/g, " ").slice(0, 120), stText.replace(/\s+/g, " ").slice(0, 120)]));
   ok("Nightmare: display math renders (no raw \\[ in questions)", !/\\\[/.test(await n1.textContent("#q-body")));
   await n1.click("#btn-submit"); await n1.click("#dialog-ok"); await n1.waitForTimeout(900);
-  ok("Nightmare: results name the tier", /Nightmare II — Extreme/.test(await n1.textContent("#results-date")));
-  ok("Nightmare: review shows the likely slip for the wrong choice", (await n1.locator("#review-list .part-note", { hasText: "Likely slip" }).count()) >= 1);
+  ok("Nightmare: results name the mode", /Nightmare/.test(await n1.textContent("#results-date")) && !/Tier|Brutal|Extreme|Catastrophic/.test(await n1.textContent("#results-date")));
   await n1.screenshot({ path: "30-nightmare-results.png", fullPage: true });
-  for (const [tier, name] of [[1, "Nightmare I · Brutal"], [3, "Nightmare III · Catastrophic"]]) {
-    if (await vis(n1, "#btn-home")) await n1.click("#btn-home"); await n1.waitForTimeout(300);
-    await n1.click("#btn-create"); await n1.waitForTimeout(250);
-    await n1.click('#s-level [data-level="nightmare"]'); await n1.click(`[data-tier="${tier}"]`); await n1.click("#s-go"); await n1.waitForTimeout(300);
-    if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(600); // "Start over?" — the previous one was only quit
-    ok(`Nightmare ${"I".repeat(tier)}: starts with its own chip and 20 generated questions`, (await n1.textContent("#tb-level")) === "☠ " + name && (await n1.locator("#nav-grid .nav-cell").count()) === 20);
-    await n1.click("#btn-quit"); await n1.waitForTimeout(200); if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(300);
-  }
-  // Basecamp: the Nightmare tab reuses the last tier; Standard still works
-  if (await vis(n1, "#btn-home")) await n1.click("#btn-home"); await n1.waitForTimeout(400);
-  if (await vis(n1, '#level-pick [data-level="nightmare"]')) { await n1.click('#level-pick [data-level="nightmare"]'); await n1.waitForTimeout(300); ok("Basecamp: Nightmare tab shows the last tier without a dialog", !(await vis(n1, "#setup-dialog")) && (await n1.locator('#level-pick [data-level="nightmare"].active, #level-pick [data-level="nightmare"][aria-selected="true"]').count()) === 1); }
-  await n1.click("#btn-create"); await n1.waitForTimeout(250);
-  await n1.click('#s-level [data-level="normal"]'); await n1.waitForTimeout(100);
-  ok("Standard: Nightmare cards hidden and Start enabled", !(await vis(n1, "#s-nm")) && !(await n1.isDisabled("#s-go")) && !(await n1.isDisabled("#s-group")));
+  // legacy history from the radicals unit still displays (Tim's Test, Nightmare tiers), and nothing is deleted
+  const nHist = await n1.evaluate(() => {
+    const k = "campfire-prep.history.v2"; const h = JSON.parse(localStorage.getItem(k));
+    const legacy = (lv, id) => { const a = JSON.parse(JSON.stringify(h[h.length - 1])); a.id = id; a.level = lv; delete a.subject; a.date = Date.now() - 86400000 * 9; return a; };
+    h.push(legacy("nightmare2", "legacy-nm2"), legacy("classmate", "legacy-tim"));
+    localStorage.setItem(k, JSON.stringify(h)); return h.length;
+  });
+  await n1.reload(); await n1.waitForTimeout(600); if (await vis(n1, "#btn-enter")) await n1.click("#btn-enter");
+  await navTo(n1, "practice"); await n1.click('.screen:not([hidden]) [data-tabs] [data-go="progress"]'); await n1.waitForTimeout(400);
+  const histTxt = await n1.textContent("#history-list");
+  ok("Legacy radicals attempts still listed in history (Nightmare II, Tim's Test)", /Nightmare II/.test(histTxt) && /Tim/.test(histTxt) && (await n1.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.history.v2")).length)) === nHist);
+  // Standard still works
+  await create(n1, "normal");
   await n1.click("#s-go"); await n1.waitForTimeout(300); if (await vis(n1, "#dialog")) await n1.click("#dialog-ok"); await n1.waitForTimeout(600);
-  ok("Standard: test starts without a Nightmare chip", await vis(n1, "#screen-test") && !(await vis(n1, "#tb-level")) && !/nm-/.test(await n1.evaluate(() => localStorage.getItem("campfire-prep.session.v2") || "")));
+  ok("Normal: test starts with its own chip, 20 generated questions", await vis(n1, "#screen-test") && /Normal/.test(await n1.textContent("#tb-level")) && (await n1.locator("#nav-grid .nav-cell").count()) === 20 && !/nm-/.test(await n1.evaluate(() => localStorage.getItem("campfire-prep.session.v2") || "")));
 
   ok("No JS errors", errors.length === 0, errors.join(" | "));
   await b.close();

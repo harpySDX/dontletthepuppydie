@@ -2,15 +2,20 @@
   "use strict";
 
   // ───────────────────────── exam layout ─────────────────────────
-  // Matches the unit test outline: 34 marks in 60 minutes.
+  // Normal and Challenging match the unit test outline (34 marks: WR 19, NR 5, MC 10). Nightmare is one
+  // gauntlet of written stages, so sections, counts and marks are worked out from the test itself.
   const DEFAULT_SECONDS = 60 * 60;
   const durOf = (x) => (x && x.duration) || DEFAULT_SECONDS; // each test can have its own time limit
   const SECTIONS = [
-    { key: "wr", name: "Written Response", short: "WR", count: 5, marks: 19 },
-    { key: "nr", name: "Numerical Response", short: "NR", count: 5, marks: 5 },
-    { key: "mc", name: "Multiple Choice", short: "MC", count: 10, marks: 10 },
+    { key: "wr", name: "Written Response", short: "WR" },
+    { key: "nr", name: "Numerical Response", short: "NR" },
+    { key: "mc", name: "Multiple Choice", short: "MC" },
   ];
-  const TOTAL_MARKS = SECTIONS.reduce((s, x) => s + x.marks, 0);
+  // the sections a given test actually has, with counts and marks
+  function sectionsOf(items) {
+    return SECTIONS.map((s) => { const xs = items.filter((it) => it.kind === s.key); return { ...s, name: window.I18N ? window.I18N.t("sec." + s.key) : s.name, count: xs.length, marks: xs.reduce((a, it) => a + (it.max !== undefined ? it.max : maxMarks(it)), 0) }; }).filter((s) => s.count);
+  }
+  const tr = (k, v) => (window.I18N ? window.I18N.t(k, v) : k);
 
   const KEYS = {
     history: "campfire-prep.history.v2",
@@ -24,6 +29,8 @@
     notebook: "campfire-prep.notebook.v1",   // Mistake Notebook: { key: { understood, cat, note } } (answers themselves come from history)
     room: "campfire-prep.room.v1",           // the study room you're in (answers so far), survives refresh
     roomBoards: "campfire-prep.roomboards.v1", // result codes you've pasted, per room
+    ui: "campfire-prep.ui.v1",               // { lang, layout, theme }
+    pad: "campfire-prep.pad.global.v1",      // scratchpad page outside tests: { strokes, notes }
   };
 
   const $ = (s, root = document) => root.querySelector(s);
@@ -36,24 +43,37 @@
     nr: new Map([...NRB, ...CHN, ...CM.nr].map((q) => [q.id, q])),
     wr: new Map([...WRB, ...CHW, ...CM.wr].map((q) => [q.id, q])),
   };
-  // Nightmare questions are generated; their id is enough to rebuild them exactly (saved tests, review, history)
+  // Generated questions (quadratics "qd-…", and the retired radicals Nightmare "nm-…") are rebuilt exactly
+  // from their id, so saved tests, reviews and history never need to store the question itself.
   for (const m of Object.values(BANKS)) {
     const get = m.get.bind(m), has = m.has.bind(m);
-    m.get = (id) => { let q = get(id); if (!q && window.Nightmare && /^nm-/.test(id || "")) { q = window.Nightmare.byId(id); if (q) m.set(id, q); } return q; };
+    m.get = (id) => {
+      let q = get(id);
+      if (!q && /^qd-/.test(id || "") && window.QuadBank) { q = window.QuadBank.byId(id); if (q) m.set(id, q); }
+      if (!q && /^nm-/.test(id || "") && window.Nightmare) { q = window.Nightmare.byId(id); if (q) m.set(id, q); }
+      if (!q && /^cb-/.test(id || "") && window.Bank) { q = window.Bank.byId(id); if (q) m.set(id, q); }
+      return q;
+    };
     m.has = (id) => has(id) || !!m.get(id);
   }
   const LEVELS = {
-    classmate: { label: "Tim's Test", short: "Tim's", hint: "A practice test written by Tim, credited with thanks: the same 20 questions every time. Your teacher says it's a bit softer than the real test." },
-    normal: { label: "Normal", short: "Normal", hint: "Unit-test level, laid out like the real thing. Fresh questions every time." },
-    challenge: { label: "Challenge", short: "Challenge", hint: "Much harder than the real test: nested radicals, cube-root conjugates, double squaring. A lower mark here is normal." },
-    nightmare1: { label: "Nightmare I — Brutal", short: "Nightmare I", hint: "Generated and checked fresh each time. Dense exponent laws, big radicands with variables, like radicals and binomial rationalizing.", nightmare: 1 },
-    nightmare2: { label: "Nightmare II — Extreme", short: "Nightmare II", hint: "Nested radicals, conjugates with coefficients, cube-root denominators, double-radical equations and error analysis.", nightmare: 2 },
-    nightmare3: { label: "Nightmare III — Catastrophic", short: "Nightmare III", hint: "Multi-layer boss questions: rational-power products, nested radicals and ugly conjugates chained together.", nightmare: 3 },
+    simple: { label: "Simple", short: "Simple", practice: true, hint: "Guided practice: one skill at a time with step-by-step hints and instant feedback. Not timed." },
+    normal: { label: "Normal", short: "Normal", hint: "Unit-test level: 34 marks laid out like the real test, fresh verified questions every time. Hints are there if you ask (they're noted in your review)." },
+    challenge: { label: "Challenging", short: "Challenging", hint: "Harder than the unit test: fractions, disguised forms, traps and combined skills. One strategy hint per question." },
+    nightmare: { label: "Nightmare", short: "Nightmare", hint: "One connected gauntlet: five stages about a single function. No hints, exact answers only." },
+    // retired levels, kept so earlier history still displays (radicals unit)
+    classmate: { label: "Tim's Test (radicals, retired)", short: "Tim's", legacy: true, hint: "" },
+    nightmare1: { label: "Nightmare I (radicals, retired)", short: "Nightmare I", legacy: true, hint: "" },
+    nightmare2: { label: "Nightmare II (radicals, retired)", short: "Nightmare II", legacy: true, hint: "" },
+    nightmare3: { label: "Nightmare III (radicals, retired)", short: "Nightmare III", legacy: true, hint: "" },
   };
+  const TEST_LEVELS = ["normal", "challenge", "nightmare"];
   const levelOf = (a) => (a && a.level) || "normal";
-  const nmTier = (lv) => (window.Nightmare ? window.Nightmare.tierOf(lv) : null);
+  const levelName = (lv) => (LEVELS[lv] && !LEVELS[lv].legacy ? tr(`mode.${lv}`) : (LEVELS[lv] || LEVELS.normal).label);
+  // tests taken before the switch to quadratics have no subject; they were the radicals unit
+  const subjectOf = (a) => (a && a.subject) || "radicals";
   // Harder-than-the-test levels: kept out of accuracy, recommendations and the notebook (they'd skew them)
-  const isHard = (lv) => lv === "challenge" || !!nmTier(lv);
+  const isHard = (lv) => lv === "challenge" || /^nightmare/.test(lv || "");
   const LETTERS = ["A", "B", "C", "D", "E", "F"];
   const Check = window.MathCheck;
 
@@ -64,8 +84,20 @@
     del(key) { try { localStorage.removeItem(key); } catch { /* ignore */ } },
   };
   const getHistory = () => store.get(KEYS.history, []);
-  const getPrefs = () => Object.assign({ buddyMode: "off", level: "normal", name: "", minutes: 60, hardcore: false, drain: false }, store.get(KEYS.prefs, {}));
-  const setPrefs = (p) => store.set(KEYS.prefs, { ...getPrefs(), ...p });
+  const getPrefs = () => {
+    const p = Object.assign({ buddyMode: "off", level: "normal", mode: null, name: "", minutes: 60, hardcore: false, drain: false }, store.get(KEYS.prefs, {}));
+    if (!TEST_LEVELS.includes(p.level)) p.level = /^nightmare/.test(p.level) ? "nightmare" : "normal"; // retired levels → nearest current one
+    return p;
+  };
+  // Goose Mode is its own gameplay ruleset, never a difficulty: choosing Simple switches it off (and restores the
+  // standard rules); choosing any other difficulty never switches it on.
+  const setPrefs = (p) => {
+    const was = getPrefs();
+    const next = { ...was, ...p };
+    if (next.mode === "simple" && next.goose) next.goose = false;
+    store.set(KEYS.prefs, next);
+    if (!!was.goose !== !!next.goose && typeof applyGoose === "function") applyGoose();
+  };
 
   // ───────────────────────── helpers ─────────────────────────
   function esc(s) {
@@ -76,6 +108,8 @@
     return `<code>${esc(t)}</code>`;
   }
   function renderMath(str) {
+    // graphs travel inside question text as tokens; draw them first (their SVG holds no TeX)
+    if (window.Graph && String(str).includes("[[graph|")) str = window.Graph.render(str);
     return String(str).split(/(\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/).map((part) =>
       part.startsWith("\\(") && part.endsWith("\\)") ? tex(part.slice(2, -2))
         : part.startsWith("\\[") && part.endsWith("\\]") ? `<span class="math-display">${tex(part.slice(2, -2), true)}</span>` : part).join("");
@@ -96,10 +130,11 @@
     const m = Math.round(sec / 60);
     return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
   }
+  const locale = () => (window.I18N ? (window.I18N.LANGS.find((l) => l.id === window.I18N.lang) || {}).html : undefined);
   function niceDate(ts, withTime = true) {
     const d = new Date(ts);
-    const date = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    return withTime ? `${date} · ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}` : date;
+    const date = d.toLocaleDateString(locale(), { weekday: "short", month: "short", day: "numeric" });
+    return withTime ? `${date} · ${d.toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" })}` : date;
   }
   const fmtMarks = (n) => (Math.round(n * 10) / 10).toString();
   const compareAttempts = (a, b) => b.percent - a.percent || a.totalTime - b.totalTime;
@@ -109,19 +144,147 @@
   let viewing = null, reviewFilter = "all";
   let pad = null;
 
+  // which island item a screen belongs to, and the short label the collapsed island shows
+  const NAV_OF = { home: "home", results: "home", practice: "practice", course: "practice", review: "practice", learning: "practice", progress: "practice", library: "library", studyroom: "studyroom", room: "studyroom", lobby: "studyroom" };
+  const CTX_KEY = { home: "nav.home", practice: "nav.practice", course: "prac.tab.course", review: "prac.tab.review", learning: "prac.tab.plan", progress: "prac.tab.progress", library: "nav.concepts", studyroom: "nav.room", room: "nav.room", lobby: "nav.lobby", results: "nav.results", test: "nav.test", start: "nav.title" };
   function show(name) {
     for (const s of $$(".screen")) s.hidden = s.id !== `screen-${name}`;
     $("#topbar-test").hidden = name !== "test";
-    $("#main-nav").hidden = !["home", "library", "review", "learning", "results", "room"].includes(name);
+    const isl = $("#island");
+    isl.dataset.screen = name;
+    isl.classList.toggle("in-test", name === "test");
+    setIsland(false);
     for (const b of $$("#main-nav button")) {
-      const on = b.dataset.go === name || (name === "results" && b.dataset.go === "home") || (name === "room" && b.dataset.go === "home");
+      const on = b.dataset.go === NAV_OF[name];
       b.classList.toggle("active", on);
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     }
+    $("#island-ctx").textContent = tr(CTX_KEY[name] || "nav.home");
     document.body.dataset.screen = name;
+    renderTabs(name);
+    if (window.Tools) window.Tools.setVisible(name !== "start");
+    // outside a test the scratchpad is one general notes page
+    if (name !== "test" && pad && !pad.root.hidden) usePadGeneral();
     window.scrollTo({ top: 0 });
     if (window.Review && name !== "test") window.Review.updateBadge();
     if (window.Tutor) window.Tutor.refresh();
+  }
+
+  // ───────── Practice tabs (Skills · Review · Study plan · Progress) ─────────
+  const TABS = [["practice", "prac.tab.drills"], ["course", "prac.tab.course"], ["review", "prac.tab.review"], ["learning", "prac.tab.plan"], ["progress", "prac.tab.progress"]];
+  function renderTabs(name) {
+    for (const el of $$("[data-tabs]")) {
+      if (el.closest(".screen").hidden) continue;
+      el.innerHTML = `<div class="tabbar" role="tablist" aria-label="${esc(tr("nav.practice"))}">${TABS.map(([id, key]) => `<button type="button" role="tab" data-go="${id}" aria-selected="${id === name}" class="${id === name ? "active" : ""}">${esc(tr(key))}${id === "review" ? `<span class="nav-badge tab-badge" data-badge="review" hidden></span>` : ""}</button>`).join("")}</div>`;
+    }
+  }
+
+  // ───────── Dynamic island ─────────
+  function setIsland(open) {
+    const isl = $("#island"), btn = $("#brand-link");
+    if (isl.classList.contains("in-test")) open = false;
+    isl.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", String(open));
+    btn.setAttribute("aria-label", tr(open ? "nav.close" : "nav.open"));
+    for (const b of $$("#main-nav button")) b.tabIndex = open ? 0 : -1;
+  }
+  function onIslandKey(e) {
+    const items = $$("#main-nav button");
+    const k = items.indexOf(document.activeElement);
+    if (k < 0) return;
+    const go = (i) => { e.preventDefault(); items[(i + items.length) % items.length].focus(); };
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") go(k + 1);
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") go(k - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(items.length - 1);
+  }
+
+  // ───────── Settings: language, layout, theme (saved on this device) ─────────
+  const LAYOUTS = ["balanced", "focus", "studio", "studioplus"], THEMES = ["light", "dark", "system"];
+  const getUI = () => { const u = store.get(KEYS.ui, {}); return { lang: (window.I18N && window.I18N.LANGS.some((l) => l.id === u.lang)) ? u.lang : "en", layout: LAYOUTS.includes(u.layout) ? u.layout : "balanced", theme: THEMES.includes(u.theme) ? u.theme : "light" }; };
+  function applyUI(change) {
+    const u = { ...getUI(), ...(change || {}) };
+    // only write when the user changes something: applying on start-up never rewrites (or "repairs") saved choices
+    if (change) store.set(KEYS.ui, { ...store.get(KEYS.ui, {}), ...u });
+    const d = document.documentElement;
+    d.dataset.theme = u.theme;
+    d.dataset.layout = u.layout;
+    const meta = document.querySelector('meta[name="color-scheme"]');
+    if (meta) meta.content = u.theme === "dark" ? "dark" : u.theme === "light" ? "light" : "light dark";
+    if (window.I18N && window.I18N.lang !== u.lang) window.I18N.set(u.lang);
+    renderSettings();
+    return u;
+  }
+  const LAYOUT_ICON = {
+    balanced: '<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="1" width="46" height="30" rx="4" class="lo-frame"/><rect x="5" y="5" width="9" height="22" rx="2" class="lo-side"/><rect x="17" y="5" width="16" height="22" rx="2" class="lo-main"/><rect x="36" y="5" width="7" height="22" rx="2" class="lo-side"/></svg>',
+    focus: '<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="1" width="46" height="30" rx="4" class="lo-frame"/><rect x="9" y="5" width="30" height="22" rx="2" class="lo-main"/></svg>',
+    studio: '<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="1" width="46" height="30" rx="4" class="lo-frame"/><rect x="5" y="5" width="8" height="22" rx="2" class="lo-side"/><rect x="15" y="5" width="13" height="22" rx="2" class="lo-main"/><rect x="30" y="5" width="13" height="10" rx="2" class="lo-side"/><rect x="30" y="17" width="13" height="10" rx="2" class="lo-side"/></svg>',
+    studioplus: '<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="1" width="46" height="30" rx="4" class="lo-frame"/><rect x="4" y="4" width="40" height="4" rx="1.5" class="lo-side"/><rect x="4" y="10" width="15" height="18" rx="2" class="lo-main"/><rect x="21" y="10" width="11" height="8" rx="2" class="lo-side"/><rect x="21" y="20" width="11" height="8" rx="2" class="lo-side"/><rect x="34" y="10" width="10" height="18" rx="2" class="lo-side"/></svg>',
+  };
+  function renderSettings() {
+    if (window.Onboarding) window.Onboarding.renderHelp();
+    const u = getUI();
+    if (!$("#set-lang") || !window.I18N) return;
+    $("#set-lang").innerHTML = window.I18N.LANGS.map((l) => `<button type="button" role="radio" aria-checked="${u.lang === l.id}" class="${u.lang === l.id ? "active" : ""}" data-lang="${l.id}" lang="${l.html}">${esc(l.native)}</button>`).join("");
+    $("#set-layout").innerHTML = LAYOUTS.map((l) => `<button type="button" role="radio" aria-checked="${u.layout === l}" class="layout-opt${u.layout === l ? " active" : ""}" data-layout="${l}">${LAYOUT_ICON[l]}<span class="lo-t"><b>${esc(tr("layout." + l))}</b><small>${esc(tr("layout." + l + ".d"))}</small></span></button>`).join("");
+    $("#set-theme").innerHTML = THEMES.map((th) => `<button type="button" role="radio" aria-checked="${u.theme === th}" class="theme-opt th-${th}${u.theme === th ? " active" : ""}" data-theme-opt="${th}"><span class="th-swatch" aria-hidden="true"></span>${esc(tr("theme." + th))}</button>`).join("");
+    $("#set-content-note").hidden = u.lang === "en";
+    renderGooseSetting();
+  }
+  // ───────── Goose Mode setting (a gameplay ruleset, separate from difficulty) ─────────
+  function gooseCalmPref() { const p = getPrefs(); return p.gooseCalm === undefined ? matchMedia("(prefers-reduced-motion: reduce)").matches : !!p.gooseCalm; }
+  function renderGooseSetting() {
+    const box = $("#set-goose"); if (!box) return;
+    const p = getPrefs(), simple = selectedMode() === "simple", on = !!p.goose;
+    box.innerHTML = `<div class="goose-set">
+      <div class="goose-row"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><use href="#goose-head"/></svg><b id="goose-l">${esc(tr("goose.name"))}</b>
+        <button type="button" class="goose-switch" id="goose-toggle" role="switch" aria-checked="${on}" aria-labelledby="goose-l" aria-describedby="goose-d${simple ? " goose-simple" : ""}" ${simple && !on ? "disabled" : ""}><span class="sr-only">${esc(tr(on ? "goose.on" : "goose.off"))}</span></button></div>
+      <p class="set-note" id="goose-d">${esc(tr("goose.desc"))}</p>
+      ${simple ? `<p class="set-note warn" id="goose-simple">${esc(tr("goose.simpleNote"))}</p>` : ""}
+      ${on ? `<label class="goose-calm"><input type="checkbox" id="goose-calm" ${gooseCalmPref() ? "checked" : ""}/> <span>${esc(tr("goose.calm"))}</span></label>` : ""}
+    </div>`;
+  }
+  const MASCOT = { on: { pup: "#goose-head", brand: "#goose-head" }, off: { pup: "#pup", brand: "#paw" } };
+  function applyGoose() {
+    const on = !!getPrefs().goose;
+    document.body.classList.toggle("goose-on", on);
+    const m = MASCOT[on ? "on" : "off"];
+    const pu = $("#btn-settings use"); if (pu) pu.setAttribute("href", m.pup);
+    const bu = $("#brand-link .pup-mark use"); if (bu) { bu.setAttribute("href", m.brand); bu.parentElement.setAttribute("viewBox", on ? "0 0 32 32" : "0 0 24 24"); }
+    if (window.Goose) { if (on) window.Goose.enable(); else window.Goose.disable(); }
+    if (session && !session.demo && fire) syncGooseSession();
+    renderGooseSetting();
+  }
+  let popOpener = null;
+  function setSettings(open) {
+    const pop = $("#settings-pop"), btn = $("#btn-settings");
+    if (open === !pop.hidden) return;
+    pop.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    if (open) { popOpener = document.activeElement; renderSettings(); setIsland(false); const first = pop.querySelector(".active") || pop.querySelector("button"); if (first) first.focus(); }
+    else if (popOpener && document.contains(popOpener)) popOpener.focus();
+  }
+  // radio groups inside the popover: arrow keys move between options
+  function onRadioKeys(e) {
+    const grp = e.target.closest('[role="radiogroup"]'); if (!grp) return;
+    const items = $$('[role="radio"]', grp), k = items.indexOf(e.target); if (k < 0) return;
+    const next = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (next) { e.preventDefault(); const idx = (k + next + items.length) % items.length; items[idx].click(); const fresh = $$('[role="radio"]', grp)[idx]; if (fresh) fresh.focus(); }
+  }
+  // re-render whatever is on screen in the new language
+  function rerenderScreen() {
+    const scr = document.body.dataset.screen;
+    $("#island-ctx").textContent = tr(CTX_KEY[scr] || "nav.home");
+    setIsland($("#island").classList.contains("open"));
+    if (scr === "home") renderHome();
+    else if (scr === "practice") { if ($("#prac-run").hidden) renderDrills(); }
+    else if (scr === "progress") renderProgressScreen();
+    else if (scr === "course") renderCourse();
+    else if (scr === "studyroom") renderStudyRoom();
+    else if (scr === "test" && session) { renderQuestion(); }
+    else if (scr === "results" && viewing) showResults(viewing, false);
+    renderTabs(scr);
+    if (scr === "library" && window.Library) window.Library.renderNav();
   }
 
   // ───────── learning evidence (shared by Basecamp, Library, My Learning, Tutor) ─────────
@@ -185,9 +348,14 @@
   function navigate(where, arg) {
     if (isAssessmentActive() && session) return; // never navigate away from a running test via the nav
     if (lobby) { clearInterval(lobby.timer); lobby = null; }
+    if (where !== "practice") stopGuided();
     if (where === "library") { show("library"); window.Library.open(arg); }
     else if (where === "learning") { show("learning"); window.Analyst.render(); }
     else if (where === "review") { show("review"); window.Review.render(); }
+    else if (where === "practice") { show("practice"); stopGuided(); renderDrills(); }
+    else if (where === "progress") { show("progress"); renderProgressScreen(); }
+    else if (where === "course") { show("course"); renderCourse(); }
+    else if (where === "studyroom") { show("studyroom"); renderStudyRoom(); }
     else if (where === "room" && window.Rooms) { window.Rooms.show(); }
     else goHome();
   }
@@ -203,10 +371,9 @@
       sc.style.setProperty("--heat", "58");
       hero.appendChild(sc);
     }
-    const toured = store.get(KEYS.toured, false);
-    $("#title-note").textContent = toured
-      ? "Welcome back. Your tests and progress are waiting in Basecamp."
-      : "First time? Entering Basecamp starts a short guided tour. You can skip it.";
+    const fresh = window.Onboarding ? window.Onboarding.shouldOfferSite() : !store.get(KEYS.toured, false);
+    $("#title-note").dataset.i18n = fresh ? "start.noteNew" : "start.noteBack";
+    $("#title-note").textContent = tr(fresh ? "start.noteNew" : "start.noteBack");
   }
 
   // ───────────────────────── session timing ─────────────────────────
@@ -228,21 +395,85 @@
 
   // ───────────────────────── Basecamp ─────────────────────────
   function goHome() {
+    stopGuided();
     show("home");
     renderHome();
   }
 
-  function renderHome() {
-    const history = getHistory();
-    const prefs = getPrefs();
-    const lv = LEVELS[prefs.level] ? prefs.level : "normal";
-    const analyze = (h) => window.Insights.analyze(h, qOf, (it) => gradeItem(it).parts);
-    // Topic advice ignores Challenge tests so they don't drag your mastery down
-    const core = analyze(history.filter((a) => !isHard(levelOf(a))));
-    const atLevel = analyze(history.filter((a) => levelOf(a) === lv));
-    const all = analyze(history);
+  // ───────── quadratics evidence, summarised for the dashboard (all from real records) ─────────
+  const quadConcepts = () => window.Concepts.CONCEPTS.filter((c) => c.unit === "quadratics");
+  const conceptTitle = (c) => { const L = window.I18N ? window.I18N.lang : "en"; return (L !== "en" && c.tr && c.tr[L] && c.tr[L].title) || c.title; };
+  const TOPIC_GROUPS = [
+    ["Quadratic basics", ["quad.basics", "quad.direction"]],
+    ["Vertex & axis", ["quad.vertex_form", "quad.axis", "quad.standard_vertex", "quad.complete_square"]],
+    ["Graphing", ["quad.transform", "quad.graph_read", "quad.sketch", "quad.equation_from"]],
+    ["Intercepts & roots", ["quad.intercepts", "quad.factored_form", "quad.formula", "quad.discriminant"]],
+    ["Applications", ["quad.applications"]],
+  ];
+  function quadSummary(L) {
+    const qs = quadConcepts();
+    const seen = qs.filter((c) => L.prof[c.id].accuracy !== null);
+    const overall = seen.length ? Math.round((seen.reduce((a, c) => a + L.prof[c.id].accuracy, 0) / seen.length) * 100) : null;
+    const confident = qs.filter((c) => L.prof[c.id].status === "confident").length;
+    const groups = TOPIC_GROUPS.map(([name, ids]) => { const ps = ids.map((id) => L.prof[id]).filter((p) => p && p.accuracy !== null); return { name, pct: ps.length ? Math.round((ps.reduce((a, p) => a + p.accuracy, 0) / ps.length) * 100) : null }; });
+    const answers = L.records.filter((r) => (r.concepts || []).some((c) => /^quad\./.test(c))).length;
+    return { qs, seen, overall, confident, groups, answers };
+  }
+  // consecutive days with any test or practice answer, ending today (or yesterday: still alive)
+  function streakInfo() {
+    const days = new Set([...getHistory().map((a) => a.date), ...store.get(KEYS.practice, []).map((p) => p.date)].map((d) => new Date(d).toDateString()));
+    const day = (k) => { const d = new Date(); d.setDate(d.getDate() - k); return d.toDateString(); };
+    const today = days.has(day(0));
+    let n = 0;
+    for (let k = today ? 0 : 1; days.has(day(k)); k++) n++;
+    return { n, today };
+  }
+  const rel = (ts) => {
+    const s = Math.max(1, Math.round((Date.now() - ts) / 1000));
+    const rtf = (v, u) => { try { return new Intl.RelativeTimeFormat(locale(), { numeric: "auto", style: "short" }).format(-v, u); } catch { return `${v} ${u} ago`; } };
+    return s < 3600 ? rtf(Math.max(1, Math.round(s / 60)), "minute") : s < 86400 ? rtf(Math.round(s / 3600), "hour") : rtf(Math.round(s / 86400), "day");
+  };
+  function recentActivity(limit = 4) {
+    const items = getHistory().map((a) => ({ date: a.date, kind: "test", title: tr("act.test", { mode: levelName(levelOf(a)) }), sub: subjectOf(a) === "quadratics" ? tr("home.topicName") : "Radicals", pct: a.percent, attempt: a.id }));
+    const runs = new Map();
+    for (const p of store.get(KEYS.practice, [])) { const r = runs.get(p.quiz) || { date: p.date, n: 0, right: 0, concepts: new Set(), source: p.source }; r.date = Math.max(r.date, p.date); r.n++; if (p.correct) r.right++; (p.concepts || []).forEach((c) => r.concepts.add(c)); runs.set(p.quiz, r); }
+    for (const r of runs.values()) {
+      const c = window.Concepts.get([...r.concepts][0]);
+      items.push({ date: r.date, kind: "practice", title: tr("act.practice", { topic: c ? conceptTitle(c) : "" }), sub: `${r.right}/${r.n}`, pct: Math.round((r.right / r.n) * 100), concept: c && c.id });
+    }
+    return items.sort((a, b) => b.date - a.date).slice(0, limit);
+  }
+  // goals are measured, never invented: each one shows real progress toward a clear target
+  function goalsFor(L, Q) {
+    if (!L.records.length) return [];
+    const out = [];
+    const focus = L.recs.find((r) => /^quad\./.test(r.concept) && r.status !== "confident" && r.status !== "not_attempted") || L.recs.find((r) => /^quad\./.test(r.concept) && r.status !== "confident");
+    if (focus) {
+      const p = L.prof[focus.concept];
+      const checks = [p.questions >= 3 && p.sessions >= 2, p.distinct >= 3, p.accuracy !== null && p.accuracy >= 0.85 && (p.recentAccuracy === null || p.recentAccuracy >= 0.8), p.retrievals >= 1].filter(Boolean).length;
+      out.push({ title: tr("goals.master", { concept: conceptTitle(window.Concepts.get(focus.concept)) }), sub: tr("goals.criteria", { done: checks }), pct: Math.round((checks / 4) * 100), lesson: focus.concept });
+    }
+    out.push({ title: tr("goals.overall"), sub: Q.overall === null ? tr("home.masteryNone") : `${Q.overall}%`, pct: Q.overall === null ? 0 : Math.min(100, Math.round((Q.overall / 80) * 100)) });
+    out.push({ title: tr("goals.coverage"), sub: tr("goals.tried", { done: Q.seen.length, total: Q.qs.length }), pct: Math.round((Q.seen.length / Q.qs.length) * 100) });
+    return out;
+  }
+  const ring = (pct, size = 92) => {
+    const r = size / 2 - 8, c = 2 * Math.PI * r;
+    return `<svg class="ring2" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="ring-track"/>${pct ? `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="ring-fill" style="stroke-dasharray:${(pct / 100) * c} ${c}"/>` : ""}</svg>`;
+  };
+  const miniRing = (pct) => { const r = 13, c = 2 * Math.PI * r; return `<svg class="ring-mini" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="ring-track"/>${pct ? `<circle cx="16" cy="16" r="${r}" class="ring-fill" style="stroke-dasharray:${(pct / 100) * c} ${c}"/>` : ""}</svg>`; };
 
-    // In-progress test
+  function renderHome() {
+    const L = learningState();
+    const Q = quadSummary(L);
+    const prefs = getPrefs();
+    const first = !L.records.length && !getHistory().length;
+    $("#home-kicker").textContent = tr(first ? "home.kicker.first" : "home.kicker.back");
+    $("#home-greeting").textContent = tr(first ? "home.title.first" : "home.title.back");
+    const focusRec = L.recs.find((r) => /^quad\./.test(r.concept) && r.status !== "confident");
+    $("#home-sub").textContent = first ? tr("home.sub.first") : tr("home.sub.back", { answers: Q.answers, topic: focusRec ? conceptTitle(window.Concepts.get(focusRec.concept)) : tr("home.topicName") });
+
+    // in-progress test
     let saved = savedSession();
     if (saved && saved.items && timeLeftOf(saved) <= 0) { finishExpiredSession(saved); saved = null; }
     const box = $("#resume-box");
@@ -250,14 +481,14 @@
       const answered = saved.items.filter(isAnswered).length;
       const grp = saved.group ? ` · group ${esc(saved.group.code)}` : "";
       box.innerHTML = `
-        <div class="resume-card ${saved.paused ? "paused" : ""}">
+        <div class="resume-card glass ${saved.paused ? "paused" : ""}">
           <div>
-            <span class="resume-kicker">${saved.paused ? "⏸ Paused test" : "Test in progress"} · ${esc(LEVELS[levelOf(saved)].short)}</span>
-            <span class="resume-meta"><b>${clock(timeLeftOf(saved))}</b> left · ${answered}/${saved.items.length} answered${saved.paused ? "" : " · clock is running"}${grp}</span>
+            <span class="resume-kicker">${saved.paused ? "⏸ " : ""}${esc(tr("home.resumeTitle"))} · ${esc(levelName(levelOf(saved)))}</span>
+            <span class="resume-meta">${esc(tr("home.left", { time: clock(timeLeftOf(saved)), answered, total: saved.items.length }))}${grp}</span>
           </div>
           <div class="resume-actions">
-            <button class="btn btn-primary" id="btn-resume" type="button">Resume</button>
-            <button class="btn btn-link" id="btn-discard" type="button">Discard</button>
+            <button class="btn btn-primary btn-sm" id="btn-resume" type="button">${esc(tr("home.resume"))}</button>
+            <button class="btn btn-link btn-sm" id="btn-discard" type="button">${esc(tr("home.discard"))}</button>
           </div>
         </div>`;
       $("#btn-resume").onclick = resumeTest;
@@ -265,49 +496,411 @@
         if (await confirmDialog("Discard this test?", "Your answers on the unfinished test will be deleted. It won't count in your history.", "Discard", "Keep it")) { store.del(KEYS.session); renderHome(); }
       };
     } else box.innerHTML = "";
-    $("#btn-create").textContent = saved ? "Create a new test instead" : "Create test";
-    $("#btn-create").classList.toggle("btn-primary", !saved);
-    $("#btn-create").classList.toggle("btn-secondary", !!saved);
 
-    // Pickers
-    const fireOn = prefs.buddyMode !== "off";
-    $("#setup-summary").innerHTML = [
-      `<span><b>${esc(LEVELS[prefs.level] ? LEVELS[prefs.level].label : "Normal")}</b></span>`,
-      `<span><b>${prefs.minutes}</b> min</span>`,
-      `<span>${esc(window.Campfire.MODES[prefs.buddyMode].label)}${fireOn && prefs.buddyMode !== "off" ? " campfire" : ""}</span>`,
-      fireOn && prefs.hardcore ? `<span class="on">Puppy can lose</span>` : "",
-      fireOn && prefs.drain ? `<span class="on">Armadillo mode</span>` : "",
-      fireOn && window.Companion && window.Companion.summary(prefs.companion || window.Companion.full()) ? `<span class="on">${esc(window.Companion.summary(prefs.companion || window.Companion.full()))}</span>` : "",
-    ].join("");
-    for (const b of $$("#level-pick button")) { const on = b.dataset.level === lv || (b.dataset.level === "nightmare" && !!nmTier(lv)); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); }
-    document.querySelector(".launch-card").dataset.level = prefs.level;
+    // current topic + mastery
+    $("#topic-card").innerHTML = `
+      <button type="button" class="topic-main" data-lesson="quad.vertex_form">
+        <span class="topic-ico" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M4 26 Q16 -6 28 26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="10" r="2.4" fill="currentColor"/></svg></span>
+        <span class="topic-t"><small id="topic-card-h">${esc(tr("home.topic"))}</small><b>${esc(tr("home.topicName"))}</b></span><span class="qi-go" aria-hidden="true">›</span>
+      </button>
+      <div class="bar bar-lg" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Q.overall || 0}" aria-label="${esc(tr("home.mastery"))}"><div class="bar-fill" style="width:${Q.overall || 0}%"></div></div>
+      <div class="topic-foot"><span>${esc(tr("home.mastery"))}</span><b>${Q.overall === null ? esc(tr("home.masteryNone")) : Q.overall + "%"}</b></div>`;
 
-    // Greeting
-    if (!all.count) {
-      $("#home-greeting").textContent = "Welcome to Basecamp.";
-      $("#home-sub").textContent = "This is home between tests. Take your first practice test and this page fills in with your scores, trends and the topics to work on.";
-    } else {
-      const weak = core.topics.find((t) => t.pct < 85);
-      const bestNormal = history.filter((a) => levelOf(a) === "normal").sort(compareAttempts)[0];
-      const bestCh = history.filter((a) => levelOf(a) === "challenge").sort(compareAttempts)[0];
-      $("#home-greeting").textContent = all.count === 1 ? "One test down." : `${all.count} tests down.`;
-      $("#home-sub").innerHTML = (bestNormal ? `Your best Normal test is <b>${bestNormal.percent}%</b>. ` : "") +
-        (bestCh ? `Challenge best: <b>${bestCh.percent}%</b>. ` : "") +
-        (weak ? `Today's focus: <b>${esc(weak.topic)}</b>.` : core.count ? "Every topic is looking strong." : "");
+    renderModes();
+    // recent activity
+    const acts = recentActivity();
+    $("#activity").innerHTML = acts.length ? `<ul class="act-list">${acts.map((a) => `
+      <li><button type="button" class="act-item" ${a.attempt ? `data-attempt="${esc(a.attempt)}"` : a.concept ? `data-lesson="${a.concept}"` : ""}>
+        <span class="act-ico ${a.kind}" aria-hidden="true">${a.kind === "test" ? "✓" : "◎"}</span>
+        <span class="act-t"><b>${esc(a.title)}</b><small>${esc(a.sub)}</small></span>
+        <span class="act-pct ${a.pct >= 75 ? "good" : a.pct >= 50 ? "mid" : "low"}">${Math.round(a.pct)}%</span>
+        <span class="act-when">${esc(rel(a.date))}</span></button></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("act.empty"))}</p>`;
+    // goals
+    const goals = goalsFor(L, Q);
+    $("#goals").innerHTML = goals.length ? `<ul class="goal-list">${goals.map((g) => `
+      <li><button type="button" class="goal-item" ${g.lesson ? `data-lesson="${g.lesson}"` : 'data-go="progress"'}>${miniRing(g.pct)}<span class="act-t"><b>${esc(g.title)}</b><small>${esc(g.sub)}</small></span><span class="goal-pct">${g.pct}%</span></button></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("goals.empty"))}</p>`;
+    // Studio layout: every quadratics concept at a glance
+    $("#studio-concepts").innerHTML = `<h2 class="panel-title">${esc(tr("nav.concepts"))}</h2><ul class="concept-dots">${Q.qs.map((c) => { const p = L.prof[c.id]; const stt = window.Learning.STATUS[p.status]; return `<li><button type="button" data-lesson="${c.id}"><i class="dot-st st-${stt.tone}" aria-hidden="true"></i>${esc(conceptTitle(c))}<span class="cd-p">${p.accuracy === null ? "—" : Math.round(p.accuracy * 100) + "%"}</span></button></li>`; }).join("")}</ul>`;
+    // stats
+    const st = streakInfo();
+    $("#stats-panel").innerHTML = `
+      <div class="panel-head sm"><h2 id="stats-h">${esc(tr("stats.title"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="progress">${esc(tr("act.viewAll"))}</button></div>
+      <div class="stats-body">
+        <div class="ring-wrap">${ring(Q.overall)}<span class="ring-v"><b>${Q.overall === null ? "—" : Q.overall + "%"}</b><small>${esc(tr("stats.overall"))}</small></span></div>
+        <ul class="topic-bars">${Q.groups.map((g) => `<li><span class="tb-name">${esc(g.name)}</span><span class="tb-v">${g.pct === null ? "—" : g.pct + "%"}</span><span class="bar"><span class="bar-fill" style="width:${g.pct || 0}%"></span></span></li>`).join("")}</ul>
+      </div>
+      ${st.n ? `<div class="streak"><span class="streak-ico" aria-hidden="true">🔥</span><span><b>${esc(tr("stats.streak", { n: st.n }))}</b><small>${esc(tr(st.today ? "stats.streakToday" : "stats.streakKeep"))}</small></span></div>` : ""}`;
+    if (getUI().layout === "studioplus") renderStudioPlus(L, saved); else $("#splus").innerHTML = "";
+  }
+
+  // ───────── Studio+ : a full-viewport workspace built only from what is really recorded on this device ─────────
+  const SP_PRACTICE_MODES = ["simple", "normal", "challenge"];
+  function spUnitOfConcept(cid) { const s = window.Curriculum ? window.Curriculum.subsForConcept(cid)[0] : null; return s ? s.split(".")[0] : null; }
+  function studioPlusData(L) {
+    const practice = store.get(KEYS.practice, []), hist = getHistory();
+    const R = L.records;
+    const sum = (xs, k) => xs.reduce((a, r) => a + (r[k] || 0), 0);
+    const acc = sum(R, "max") ? Math.round((sum(R, "earned") / sum(R, "max")) * 100) : null;
+    // sessions: one test attempt or one practice run each, in time order
+    const bySession = new Map();
+    for (const r of R) { const k = r.session || r.attempt || r.quiz; if (!k) continue; const b = bySession.get(k) || { date: 0, earned: 0, max: 0, source: r.source }; b.date = Math.max(b.date, r.date); b.earned += r.earned; b.max += r.max; bySession.set(k, b); }
+    const sessions = [...bySession.values()].filter((b) => b.max).sort((a, b) => a.date - b.date).slice(-12);
+    const tried = Object.values(L.prof).filter((p) => p.questions >= 3 && p.accuracy !== null);
+    const strongest = tried.slice().sort((a, b) => b.accuracy - a.accuracy || b.questions - a.questions).filter((p) => p.accuracy >= 0.7).slice(0, 3);
+    const weakest = tried.slice().sort((a, b) => a.accuracy - b.accuracy || b.questions - a.questions).filter((p) => p.accuracy < 0.8).slice(0, 4);
+    const stale = Object.values(L.prof).filter((p) => p.daysSince !== null && p.daysSince >= 7).sort((a, b) => b.daysSince - a.daysSince).slice(0, 4);
+    const errs = {};
+    for (const m of L.mistakes.filter((m) => !m.fixed && !m.understood)) errs[m.category] = (errs[m.category] || 0) + 1;
+    // curriculum: coverage (subtopics with any answer) is kept apart from accuracy (marks in that unit)
+    const subSt = subStats(), cov = window.Curriculum ? window.Curriculum.coverage() : [];
+    const unitAcc = {};
+    for (const p of Object.values(L.prof)) { const u = spUnitOfConcept(p.id); if (!u || !p.max) continue; const a = unitAcc[u] || (unitAcc[u] = { e: 0, m: 0 }); a.e += p.earned; a.m += p.max; }
+    for (const r of practice) if (r.sub && r.level === "challenge") { /* challenge answers are shown in history, not in unit accuracy (same rule as mastery) */ }
+    const units = window.Curriculum ? window.Curriculum.UNITS.map((u) => {
+      const rows = cov.filter((c) => c.unit === u.id);
+      return { id: u.id, title: u.title, total: rows.length, practised: rows.filter((c) => subSt[c.id]).length, modes: rows, acc: unitAcc[u.id] && unitAcc[u.id].m ? Math.round((unitAcc[u.id].e / unitAcc[u.id].m) * 100) : null };
+    }) : [];
+    // history: real tests and real practice runs (grouped by run id)
+    const runs = new Map();
+    for (const p of practice) {
+      const r = runs.get(p.quiz) || { date: 0, n: 0, right: 0, subs: new Set(), concepts: new Set(), mode: p.mode || p.level, source: p.source };
+      r.date = Math.max(r.date, p.date); r.n++; if (p.correct) r.right++; if (p.sub) r.subs.add(p.sub); (p.concepts || []).forEach((c) => r.concepts.add(c)); runs.set(p.quiz, r);
     }
+    const items = [
+      ...hist.map((a) => ({ kind: "test", date: a.date, title: tr("sp.test", { mode: levelName(levelOf(a)) }), sub: tr("sp.qs", { n: (a.items || []).length }), pct: Math.round(a.percent), attempt: a.id })),
+      ...[...runs.values()].map((r) => {
+        const subs = [...r.subs], c = window.Concepts.get([...r.concepts][0]);
+        const units = [...new Set(subs.map((s) => s.split(".")[0]))];
+        const title = subs.length === 1 && window.Curriculum.get(subs[0]) ? window.Curriculum.get(subs[0]).title : units.length === 1 ? window.Curriculum.UNITS.find((u) => u.id === units[0]).title : units.length > 1 ? tr("course.full") : c ? conceptTitle(c) : tr("nav.practice");
+        return { kind: "practice", date: r.date, title, sub: `${r.right}/${r.n}${r.mode ? " · " + (["simple", "normal", "challenge"].includes(r.mode) ? tr("mode." + r.mode) : r.mode) : ""}`, pct: Math.round((r.right / r.n) * 100), concept: c && c.id };
+      }),
+    ].sort((a, b) => b.date - a.date).slice(0, 10);
+    const due = L.dueConcepts.slice(0, 4);
+    const dueIds = new Set(due.map((p) => p.id));
+    const nexts = L.recs.filter((r) => r.status !== "confident" && !dueIds.has(r.concept)).slice(0, 3);
+    const coveredSubs = cov.filter((c) => subSt[c.id]).length;
+    return { dueCount: L.dueConcepts.length, acc, sessions, strongest, weakest, stale, errs, units, items, due, nexts, coveredSubs, totalSubs: cov.length, tests: hist.length, answers: R.length, streak: streakInfo(), dueMistakes: L.dueMistakes.length, openMistakes: L.mistakes.filter((m) => !m.fixed && !m.understood).length };
+  }
+  function spDrillBtn(cid, mode, label) {
+    const ok = SP_PRACTICE_MODES.includes(mode) && conceptHasMode(cid, mode);
+    return `<button type="button" class="btn btn-sm ${ok ? "btn-secondary" : "btn-quiet"}" data-sp-drill="${cid}" ${ok ? "" : `disabled title="${esc(tr("sp.noLevel", { mode: tr("mode." + mode) }))}"`}>${esc(label || tr("sp.practise"))}</button>`;
+  }
+  function renderStudioPlus(L, saved) {
+    const D = studioPlusData(L), mode = selectedMode(), CU = window.Curriculum;
+    const empty = !D.answers;
+    const metric = (v, k, d) => `<div class="sp-metric${v === null || v === "—" ? " none" : ""}"${d ? ` title="${esc(tr(d))}"` : ""}><b>${v === null ? "—" : esc(String(v))}</b><span>${esc(tr(k))}</span></div>`;
+    const pctCls = (x) => (x >= 75 ? "good" : x >= 50 ? "mid" : "low");
+    const trend = D.sessions.length ? `<div class="sp-trend" role="img" aria-label="${esc(tr("sp.trend", { n: D.sessions.length }))}: ${D.sessions.map((s) => Math.round((s.earned / s.max) * 100) + "%").join(", ")}">${D.sessions.map((s) => { const pc = Math.round((s.earned / s.max) * 100); return `<span class="sp-bar ${pctCls(pc)}" style="height:${Math.max(4, pc)}%" title="${pc}% · ${esc(niceDate(s.date))}"></span>`; }).join("")}</div>` : "";
+    const plist = (ps, empt) => ps.length ? `<ul class="sp-list">${ps.map((p) => `<li><button type="button" class="sp-link" data-lesson="${p.id}">${esc(conceptTitle(window.Concepts.get(p.id)))}</button><span class="sp-pct ${pctCls(p.accuracy * 100)}">${Math.round(p.accuracy * 100)}%</span><small class="faint">${p.questions}</small></li>`).join("")}</ul>` : `<p class="empty-note">${esc(empt)}</p>`;
+    const weakList = D.weakest.length ? `<ul class="sp-list">${D.weakest.map((p) => `<li><button type="button" class="sp-link" data-lesson="${p.id}">${esc(conceptTitle(window.Concepts.get(p.id)))}</button><span class="sp-pct ${pctCls(p.accuracy * 100)}">${Math.round(p.accuracy * 100)}%</span>${spDrillBtn(p.id, mode)}</li>`).join("")}</ul>` : `<p class="empty-note">—</p>`;
+    const errRows = Object.entries(D.errs).sort((a, b) => b[1] - a[1]);
+    const diag = empty ? `<p class="empty-note">${esc(tr("sp.diag.empty"))}</p>` : `
+      <div class="sp-sec"><h3>${esc(tr("sp.trend", { n: D.sessions.length }))}</h3>${trend}<p class="faint small">${esc(tr("sp.trend.d"))}</p></div>
+      <div class="sp-two"><div class="sp-sec"><h3>${esc(tr("sp.weak"))}</h3>${weakList}</div><div class="sp-sec"><h3>${esc(tr("sp.strong"))}</h3>${plist(D.strongest, "—")}</div></div>
+      <p class="faint small">${esc(tr("sp.minQ"))}</p>
+      <div class="sp-two"><div class="sp-sec"><h3>${esc(tr("sp.errors"))}</h3>${errRows.length ? `<ul class="sp-list">${errRows.map(([k, n]) => `<li><span>${esc(window.Learning.CATEGORIES[k] || k)}</span><b class="sp-num">${n}</b></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("sp.errors.none"))}</p>`}</div>
+        <div class="sp-sec"><h3>${esc(tr("sp.stale"))}</h3>${D.stale.length ? `<ul class="sp-list">${D.stale.map((p) => `<li><button type="button" class="sp-link" data-lesson="${p.id}">${esc(conceptTitle(window.Concepts.get(p.id)))}</button><small class="faint">${esc(tr("sp.days", { n: p.daysSince }))}</small></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("sp.stale.none"))}</p>`}</div></div>`;
+    const weakest = D.weakest[0] || (L.recs.find((r) => r.status !== "not_attempted" && r.status !== "confident") ? L.prof[L.recs.find((r) => r.status !== "not_attempted" && r.status !== "confident").concept] : null);
+    const unitSel = getPrefs().spUnit && CU.UNITS.some((u) => u.id === getPrefs().spUnit) ? getPrefs().spUnit : "F";
+    const unitSubs = CU.SUBS.filter((s) => s.id.startsWith(unitSel + "."));
+    const topicOK = SP_PRACTICE_MODES.includes(mode);
+    const covMap = new Map(CU.coverage().map((c) => [c.id, c]));
+    const launch = `
+      <span class="field-label" id="sp-level-l">${esc(tr("sp.level"))}</span>
+      <div class="segmented sp-levels" role="radiogroup" aria-labelledby="sp-level-l">${MODES.map((m) => `<button type="button" role="radio" data-sp-mode="${m}" aria-checked="${m === mode}" class="${m === mode ? "active" : ""}">${esc(tr("mode." + m))}</button>`).join("")}</div>
+      <div class="sp-launch-row">
+        <button type="button" class="btn btn-primary" data-start-mode="${mode}">${esc(tr("mode.start." + mode))}</button>
+        ${saved && saved.items ? `<button type="button" class="btn btn-secondary" id="sp-resume">${esc(tr("sp.resume"))}</button>` : ""}
+      </div>
+      <div class="sp-launch-row">
+        ${weakest ? spDrillBtn(weakest.id, mode, `${tr("sp.weakest")}: ${conceptTitle(window.Concepts.get(weakest.id))}`) : ""}
+        <button type="button" class="btn btn-sm btn-secondary" data-go="review">${esc(tr("sp.reviewWrong"))}${D.openMistakes ? ` <span class="sp-count">${D.openMistakes}</span>` : ""}</button>
+      </div>
+      <div class="sp-launch-row"><span class="faint small">${esc(tr("sp.tests"))}:</span>${["normal", "challenge", "nightmare"].map((m) => `<button type="button" class="btn btn-sm btn-quiet" data-start-mode="${m}">${esc(tr("mode." + m))}</button>`).join("")}</div>
+      <div class="sp-topic">
+        <label><span>${esc(tr("sp.topic"))}</span><select id="sp-unit" class="text-input">${CU.UNITS.map((u) => `<option value="${u.id}" ${u.id === unitSel ? "selected" : ""}>${u.id} · ${esc(u.title)}</option>`).join("")}<option value="*" ${unitSel === "*" ? "selected" : ""}>${esc(tr("sp.wholeCourse"))}</option></select></label>
+        <label><span>${esc(tr("sp.sub"))}</span><select id="sp-sub" class="text-input"><option value="">${esc(tr("sp.allSubs"))}</option>${unitSubs.map((s) => `<option value="${s.id}" ${topicOK && !covMap.get(s.id).modes.includes(mode) ? "disabled" : ""}>${esc(s.title)}</option>`).join("")}</select></label>
+        <button type="button" class="btn btn-sm btn-primary" id="sp-go-topic" ${topicOK ? "" : "disabled"}>${esc(tr("sp.practiseTopic"))}</button>
+      </div>
+      ${topicOK ? "" : `<p class="faint small">${esc(tr("sp.nightmareNote"))}</p>`}`;
+    const curric = `<p class="faint small">${esc(tr("sp.curric.criteria"))}</p><ul class="sp-units">${D.units.map((u) => {
+      const ready = u.modes.filter((c) => c.modes.includes(mode)).length;
+      const pct = u.total ? Math.round((u.practised / u.total) * 100) : 0;
+      return `<li><button type="button" class="sp-unit" data-sp-unit="${u.id}"><span class="cu-letter">${u.id}</span><span class="sp-ut"><b>${esc(u.title)}</b><small>${esc(tr("sp.practised", { n: u.practised, total: u.total }))}${topicOK ? " · " + esc(tr("sp.ready", { n: ready })) : ""}</small></span>
+        <span class="bar" role="meter" aria-valuemin="0" aria-valuemax="${u.total}" aria-valuenow="${u.practised}" aria-label="${esc(tr("sp.practised", { n: u.practised, total: u.total }))}"><span class="bar-fill" style="width:${pct}%"></span></span>
+        <span class="sp-pct ${u.acc === null ? "" : pctCls(u.acc)}">${u.acc === null ? "—" : u.acc + "%"}</span></button></li>`;
+    }).join("")}</ul>`;
+    const histH = D.items.length ? `<ul class="act-list sp-hist">${D.items.map((a) => `<li><button type="button" class="act-item" ${a.attempt ? `data-attempt="${esc(a.attempt)}"` : a.concept ? `data-lesson="${a.concept}"` : ""}>
+        <span class="act-ico ${a.kind}" aria-hidden="true">${a.kind === "test" ? "✓" : "◎"}</span><span class="act-t"><b>${esc(a.title)}</b><small>${esc(a.sub)}</small></span>
+        <span class="act-pct ${pctCls(a.pct)}">${a.pct}%</span><span class="act-when">${esc(rel(a.date))}</span></button></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("sp.hist.empty"))}</p>`;
+    const queue = (D.due.length || D.dueMistakes || D.nexts.length) ? `<ul class="sp-queue">
+        ${D.dueMistakes ? `<li><span class="sp-q-k">${esc(tr("sp.mistakesDue", { n: D.dueMistakes }))}</span><button type="button" class="btn btn-sm btn-secondary" data-go="review">${esc(tr("prac.tab.review"))}</button></li>` : ""}
+        ${D.due.map((p) => `<li><span class="sp-q-k"><b>${esc(conceptTitle(window.Concepts.get(p.id)))}</b><small>${esc(tr("sp.dueReview"))} · ${esc(p.schedule.overdueDays > 0 ? tr("sp.overdue", { n: p.schedule.overdueDays }) : tr("sp.dueToday"))}</small></span>${spDrillBtn(p.id, mode)}</li>`).join("")}
+        ${D.nexts.map((r) => `<li><span class="sp-q-k"><b>${esc(conceptTitle(window.Concepts.get(r.concept)))}</b><small>${esc(r.label)} · ${esc([r.why, ...r.extra].filter(Boolean)[0] || "")}</small></span><button type="button" class="btn btn-sm btn-quiet" data-lesson="${r.concept}">${esc(tr("prac.lesson"))}</button>${spDrillBtn(r.concept, mode)}</li>`).join("")}
+      </ul><p class="faint small">${esc(tr("sp.queue.note"))}</p>` : `<p class="empty-note">${esc(tr("sp.queue.empty"))}</p><p class="faint small">${esc(tr("sp.queue.note"))}</p>`;
+    const tool = (attr, label, ico) => `<button type="button" class="sp-tool" ${attr}><span aria-hidden="true">${ico}</span>${esc(label)}</button>`;
+    $("#splus").innerHTML = `
+      <header class="sp-top glass">
+        <div class="sp-hello"><p class="eyebrow">${esc(tr("sp.kicker"))}</p><h1>${esc($("#home-greeting").textContent)}</h1></div>
+        <div class="sp-metrics">
+          ${metric(D.answers || null, "sp.m.answers")}${metric(D.acc === null ? null : D.acc + "%", "sp.m.accuracy", "sp.m.accuracy.d")}${metric(D.tests || null, "sp.m.tests")}
+          ${metric(D.streak.n || null, "sp.m.streak")}${metric(D.dueCount + D.dueMistakes || null, "sp.m.due")}${metric(`${D.coveredSubs}/${D.totalSubs}`, "sp.m.covered")}
+        </div>
+        <nav class="sp-tools" aria-label="${esc(tr("sp.tools"))}">
+          ${tool('data-sp-tool="calc"', tr("sp.calc"), "▦")}${tool('data-sp-tool="pad"', tr("sp.pad"), "✎")}${tool('data-go="library"', tr("quick.library"), "❒")}${tool('data-go="studyroom"', tr("quick.room"), "◍")}${tool('data-sp-tool="settings"', tr("sp.settings"), "⚙")}${tool('data-sp-tool="lang"', tr("sp.lang"), "文")}${tool('data-onboard="site"', tr("quick.tour"), "?")}
+        </nav>
+      </header>
+      <section class="sp-panel glass sp-diag" aria-labelledby="sp-diag-h"><div class="panel-head sm"><h2 id="sp-diag-h">${esc(tr("sp.diag"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="learning">${esc(tr("prac.tab.plan"))}</button></div><div class="sp-scroll">${diag}</div></section>
+      <section class="sp-panel glass sp-launch" aria-labelledby="sp-launch-h"><div class="panel-head sm"><h2 id="sp-launch-h">${esc(tr("sp.launch"))}</h2></div><div class="sp-scroll">${launch}</div></section>
+      <section class="sp-panel glass sp-queue-p" aria-labelledby="sp-queue-h"><div class="panel-head sm"><h2 id="sp-queue-h">${esc(tr("sp.queue"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="review">${esc(tr("act.viewAll"))}</button></div><div class="sp-scroll">${queue}</div></section>
+      <section class="sp-panel glass sp-curric" aria-labelledby="sp-curric-h"><div class="panel-head sm"><h2 id="sp-curric-h">${esc(tr("sp.curric"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="course">${esc(tr("prac.tab.course"))}</button></div><div class="sp-scroll">${curric}</div></section>
+      <section class="sp-panel glass sp-hist-p" aria-labelledby="sp-hist-h"><div class="panel-head sm"><h2 id="sp-hist-h">${esc(tr("sp.hist"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="progress">${esc(tr("act.viewAll"))}</button></div><div class="sp-scroll">${histH}</div></section>`;
+    const rs = $("#sp-resume"); if (rs) rs.onclick = resumeTest;
+  }
+  function spStartTopic() {
+    const mode = selectedMode(); if (!SP_PRACTICE_MODES.includes(mode)) return;
+    const CU = window.Curriculum, unit = $("#sp-unit").value, sub = $("#sp-sub").value;
+    const back = () => goHome();
+    if (unit === "*") return runPractice({ subs: CU.SUBS.map((s) => s.id), level: mode, n: 20, title: tr("course.full"), crumb: `${tr("prac.tab.course")} · ${tr("mode." + mode)}`, scope: "mixed", onDone: back });
+    if (sub) return runPractice({ subs: [sub], level: mode, n: 6, title: CU.get(sub).title, crumb: `${tr("prac.tab.course")} · ${tr("mode." + mode)}`, onDone: back });
+    const u = CU.UNITS.find((x) => x.id === unit);
+    return runPractice({ subs: u.subs.map((s) => s.id), level: mode, n: 10, title: u.title, crumb: `${tr("course.mixUnit")} · ${tr("mode." + mode)}`, scope: "mixed", onDone: back });
+  }
 
-    // Stat tiles (best / average are for the selected level)
-    const ln = LEVELS[lv].short;
+  // ───────── difficulty carousel + preview (previewing never starts anything) ─────────
+  const MODES = ["simple", "normal", "challenge", "nightmare"];
+  const MODE_ICON = {
+    simple: '<svg viewBox="0 0 24 24"><path d="M12 21V11M12 11c0-4 3-7 7-7 0 4-3 7-7 7zM12 13c0-3.3-2.5-6-6-6 0 3.3 2.5 6 6 6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    normal: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
+    challenge: '<svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    nightmare: '<svg viewBox="0 0 24 24"><path d="M12 3c3 4 6 6.5 6 10.5A6 6 0 0 1 6 13.5c0-2 1-3.6 2.4-4.9.2 1.8 1 3 2.2 3.4C10.5 8.4 11 5.6 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  };
+  let previewSeed = 1;
+  // The selected difficulty is whatever the learner chose last; with no choice yet it is Simple, and it is saved the
+  // first time it is shown, so it can never drift (it used to switch to Normal once any records existed).
+  const selectedMode = () => { const p = getPrefs(); if (MODES.includes(p.mode)) return p.mode; setPrefs({ mode: "simple" }); return "simple"; };
+  function recommendedMode(L) { const Q = quadSummary(L); return !L.records.length || Q.overall === null || Q.overall < 60 ? "simple" : Q.overall < 80 ? "normal" : "challenge"; }
+  function renderModes() {
+    const sel = selectedMode();
+    $("#mode-track").innerHTML = MODES.map((m) => `
+      <div class="mode-card m-${m}${m === sel ? " active" : ""}" role="radio" aria-checked="${m === sel}" tabindex="${m === sel ? 0 : -1}" data-mode="${m}" aria-label="${esc(tr("mode." + m))}: ${esc(tr("mode." + m + ".tag"))}">
+        <span class="mode-ico" aria-hidden="true">${MODE_ICON[m]}</span>
+        <b class="mode-name">${esc(tr("mode." + m))}</b>
+        <span class="mode-tag">${esc(tr("mode." + m + ".tag"))}</span>
+        <span class="mode-desc">${esc(tr("mode." + m + ".d"))}</span>
+        <span class="mode-sel">${m === sel ? `✓ ${esc(tr("mode.selected"))}` : esc(tr("mode.preview"))}</span>
+      </div>`).join("");
+    renderPreview();
+  }
+  function selectMode(m, focus) {
+    if (!MODES.includes(m)) return;
+    setPrefs({ mode: m });
+    previewSeed = 1;
+    renderModes();
+    const card = $(`#mode-track [data-mode="${m}"]`);
+    if (card) { card.scrollIntoView({ block: "nearest", inline: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); if (focus) card.focus(); }
+  }
+  function previewExample(m) {
+    const QB = window.QuadBank; if (!QB) return null;
+    const rnd = window.Group.rng(previewSeed * 7919 + MODES.indexOf(m));
+    try {
+      if (m === "nightmare") { const st = QB.buildNightmare(rnd); return { stem: st[0].intro, tags: st.map((x) => x.title.replace(/^Stage (\d) · /, "$1 · ")) }; }
+      const pickF = { simple: ["vform", "mc"], normal: ["vstd", "mc"], challenge: ["cts", "mc"] }[m];
+      const q = QB.generate(pickF[0], pickF[1], m, rnd);
+      return { stem: q.q, tags: [q.topic, q.meta.subtopic] };
+    } catch { return null; }
+  }
+  // concepts that really have questions at a level (no level substitution anywhere)
+  const conceptHasMode = (cid, m) => window.Bank.FAMILIES.some((F) => !F.id.startsWith("nm") && F.concepts.includes(cid) && F.modes.includes(m));
+  const simpleConcepts = () => quadConcepts().filter((c) => conceptHasMode(c.id, "simple"));
+  function simpleSkill(L) {
+    const p = getPrefs();
+    if (p.simpleSkill && window.Concepts.get(p.simpleSkill) && conceptHasMode(p.simpleSkill, "simple")) return p.simpleSkill;
+    const order = simpleConcepts().map((c) => c.id);
+    return order.find((id) => L.prof[id].status === "not_attempted" || L.prof[id].status === "needs_work" || L.prof[id].status === "early_warning") || order[0];
+  }
+  function renderPreview() {
+    const m = selectedMode(), L = learningState();
+    const ex = previewExample(m);
+    const rec = recommendedMode(L) === m;
+    const skill = simpleSkill(L);
+    $("#mode-preview").className = `mode-preview p-${m}`;
+    $("#mode-preview").innerHTML = `
+      <div class="mp-left">
+        <div class="mp-head"><span class="mode-ico" aria-hidden="true">${MODE_ICON[m]}</span><div><h3>${esc(tr("mode.previewTitle", { mode: tr("mode." + m) }))}${rec ? ` <span class="rec-pill">${esc(tr("mode.recommended"))}</span>` : ""}</h3><p>${esc(tr("mode." + m + ".d"))}</p></div></div>
+        <ul class="mp-chips">${[1, 2, 3].map((k) => `<li>${esc(tr(`mode.f.${m}${k}`))}</li>`).join("")}</ul>
+        ${m === "simple" ? `<label class="mp-skill"><span>${esc(tr("mode.simpleTopic"))}</span><select id="simple-skill" class="text-input">${simpleConcepts().map((c) => `<option value="${c.id}" ${c.id === skill ? "selected" : ""}>${esc(conceptTitle(c))}</option>`).join("")}</select></label>` : ""}
+        <div class="mp-actions">
+          <button type="button" class="btn btn-primary" id="btn-start" data-start-mode="${m}">${esc(tr("mode.start." + m))}</button>
+          ${m !== "simple" ? `<button type="button" class="btn btn-secondary" id="btn-create" data-setup-mode="${m}">${esc(tr("mode.options"))}</button>` : ""}
+        </div>
+        ${m !== "simple" ? `<button type="button" class="btn btn-link btn-sm mp-howto" data-onboard="test">${esc(tr("onboard.testNudge"))}</button>` : ""}
+      </div>
+      <div class="mp-example">
+        <div class="mp-ex-head"><span class="kicker">${esc(tr("mode.example"))}</span><button type="button" class="btn btn-link btn-sm" id="btn-new-example">${esc(tr("mode.newExample"))}</button></div>
+        <div class="mp-ex-q">${ex ? renderMath(ex.stem) : ""}</div>
+        ${ex ? `<div class="mp-tags">${ex.tags.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+      </div>`;
+  }
+  async function startMode(m) {
+    if (m === "simple") return startGuided(($("#simple-skill") || {}).value || simpleSkill(learningState()));
+    if (savedSession() && !(await confirmDialog("Start over?", "You have an unfinished test. Starting a new one will discard it.", "Start new test", "Cancel"))) return;
+    store.del(KEYS.session);
+    setPrefs({ level: m });
+    startTest({ level: m });
+  }
+
+  // ───────── guided practice (Simple) and skill drills share the practice runner ─────────
+  const HINT_POLICY = { simple: "steps", normal: "steps", challenge: "one", nightmare: "none" };
+  // Difficulty is exactly the one chosen: the engine never substitutes another mode, and nothing here depends on
+  // streaks, mastery or how much has been practised (that only affects which TOPICS are suggested, never how hard).
+  function runPractice({ conceptId, subs, level, n, title, crumb, onDone, scope }) {
+    const got = window.Bank.select({ concept: subs ? undefined : conceptId, subs: subs || undefined, mode: level, n, missed: scope === "mixed" ? missedSubs() : undefined });
+    if (got.unavailable || !got.items.length) {
+      confirmDialog(tr("prac.unavailTitle"), esc(tr("prac.unavail", { mode: tr("mode." + level) })), tr("common.ok"), tr("common.close"));
+      return;
+    }
+    const items = got.items.map(({ kind, q, part }) => { BANKS[kind].set(q.id, q); return window.Practice.makeItem(kind, q, part || undefined); }).filter(Boolean);
+    if (!items.length) return;
+    show("practice");
+    $("#prac-body").hidden = true;
+    const box = $("#prac-run");
+    box.hidden = false;
+    window.Practice.run(box, {
+      source: level === "simple" ? "guided" : "drill", level: level === "challenge" ? "challenge" : "normal", hintPolicy: HINT_POLICY[level],
+      crumb, title, items, exitLabel: tr("common.close"),
+      onExit: () => { stopGuided(); if (onDone) onDone(); else { renderDrills(); } },
+      onAct: (act) => { if (act === "again") runPractice({ conceptId, subs, level, n, title, crumb, onDone, scope }); },
+      end: (r) => {
+        const sm = window.Practice.summary(r);
+        const p = conceptId ? learningState().prof[conceptId] : null, stt = p ? window.Learning.STATUS[p.status] : null;
+        const revisitNote = got.revisits ? `<p class="faint small">${esc(tr("prac.revisit", { n: got.revisits }))}</p>` : "";
+        if (!p) return `<div class="pr"><p class="eyebrow">${esc(crumb)}</p><h1>${sm.right} / ${sm.n}</h1>${revisitNote}${window.Practice.reviewList(r)}
+          <div class="lesson-actions"><button class="btn btn-primary" data-pr="again" type="button">${esc(tr("prac.again"))}</button><button class="btn btn-quiet" data-pr="exit" type="button">${esc(tr("common.close"))}</button></div></div>`;
+        return `<div class="pr"><p class="eyebrow">${esc(crumb)}</p><h1>${sm.right} / ${sm.n}</h1>${revisitNote}
+          <p class="lead">${sm.right >= Math.ceil(sm.n * 0.8) ? "That's clicking. When you want more of a stretch, choose a higher level yourself — it never changes on its own." : "Worth another round: the misses are saved in your Mistake Notebook."}</p>
+          <div class="result-strip"><div><span class="rs-k">Status now</span><span class="level-pill st-${stt.tone}">${esc(stt.label)}</span></div><div><span class="rs-k">Next review</span><span class="rs-v small">${esc(window.Learning.scheduleText(p.schedule))}</span></div></div>
+          ${window.Practice.reviewList(r)}
+          <div class="lesson-actions"><button class="btn btn-primary" data-pr="again" type="button">Another round</button><button class="btn btn-secondary" data-lesson="${conceptId}" type="button">${esc(tr("prac.lesson"))}</button><button class="btn btn-quiet" data-pr="exit" type="button">${esc(tr("common.close"))}</button></div></div>`;
+      },
+    });
+  }
+  function missedSubs() {
+    const out = new Set(), C = window.Curriculum; if (!C) return out;
+    const recent = store.get(KEYS.practice, []).filter((p) => !p.correct && Date.now() - p.date < 14 * 86400000);
+    for (const p of recent) for (const c of p.concepts || []) for (const sid of C.subsForConcept(c)) out.add(sid);
+    return out;
+  }
+  function startGuided(conceptId) {
+    const c = window.Concepts.get(conceptId); if (!c) return;
+    setPrefs({ simpleSkill: conceptId });
+    runPractice({ conceptId, level: "simple", n: 6, title: conceptTitle(c), crumb: `${tr("mode.simple")} · ${tr("mode.simple.tag")}`, onDone: goHome });
+  }
+  function stopGuided() {
+    const box = $("#prac-run");
+    if (!box || box.hidden) return;
+    window.Practice.stop(box);
+    box.hidden = true; box.innerHTML = "";
+    $("#prac-body").hidden = false;
+  }
+  function renderDrills() {
+    const L = learningState(), QB = window.QuadBank;
+    const card = (c) => {
+      const p = L.prof[c.id], stt = window.Learning.STATUS[p.status];
+      const modes = new Set(["simple", "normal", "challenge"].filter((m) => conceptHasMode(c.id, m)));
+      const pct = p.accuracy === null ? null : Math.round(p.accuracy * 100);
+      return `<article class="drill glass">
+        <header><span class="level-pill st-${stt.tone}">${esc(stt.label)}</span><span class="drill-pct">${pct === null ? "" : pct + "%"}</span></header>
+        <h3>${esc(conceptTitle(c))}</h3>
+        <p class="small muted">${renderMath((window.I18N && window.I18N.lang !== "en" && c.tr && c.tr[window.I18N.lang]) ? esc(c.tr[window.I18N.lang].summary) : c.summary)}</p>
+        <div class="drill-actions">${["simple", "normal", "challenge"].map((m) => `<button type="button" class="btn btn-sm ${m === "normal" ? "btn-primary" : "btn-secondary"}" data-drill="${c.id}" data-level="${m}" ${modes.has(m) ? "" : `disabled title="${esc(tr("course.noLevel", { mode: tr("mode." + m) }))}"`}>${esc(tr("mode." + m))}</button>`).join("")}<button type="button" class="btn btn-link btn-sm" data-lesson="${c.id}">${esc(tr("prac.lesson"))}</button></div>
+      </article>`;
+    };
+    $("#drills").innerHTML = `
+      <section class="tests-row glass panel" aria-labelledby="tests-h"><div class="panel-head sm"><h2 id="tests-h">${esc(tr("prac.tests"))}</h2><button type="button" class="btn btn-link btn-sm" data-onboard="test">${esc(tr("onboard.testNudge"))}</button></div>
+        <div class="tests-btns">${["normal", "challenge", "nightmare"].map((m) => `<button type="button" class="test-tile m-${m}" data-start-mode="${m}"><span class="mode-ico" aria-hidden="true">${MODE_ICON[m]}</span><span><b>${esc(tr("mode." + m))}</b><small>${esc(tr("mode." + m + ".tag"))}</small></span></button>`).join("")}</div>
+      </section>
+      ${TOPIC_GROUPS.map(([name, ids]) => `<section class="drill-group"><h2 class="sub-h">${esc(name)}</h2><div class="drill-grid">${ids.map((id) => card(window.Concepts.get(id))).join("")}</div></section>`).join("")}
+      <p class="faint small">${esc(tr("prac.legacy"))} · ${esc(tr("prac.drill"))}</p>`;
+  }
+  // ───────── the whole course: BC Pre-Calc 11 units → subtopics, fixed difficulty, honest coverage ─────────
+  const COURSE_MODES = ["simple", "normal", "challenge"];
+  const courseMode = () => { const m = getPrefs().courseMode; return COURSE_MODES.includes(m) ? m : "normal"; };
+  function subStats() {
+    const by = {};
+    for (const p of store.get(KEYS.practice, [])) { if (!p.sub) continue; const b = by[p.sub] || (by[p.sub] = { n: 0, right: 0, last: 0 }); b.n++; if (p.correct) b.right++; b.last = Math.max(b.last, p.date); }
+    return by;
+  }
+  function renderCourse() {
+    const CU = window.Curriculum; if (!CU) return;
+    const mode = courseMode(), cov = CU.coverage(), st = subStats();
+    const impl = cov.filter((c) => c.implemented).length, withLessons = cov.filter((c) => c.lessons.length).length;
+    const open = getPrefs().courseOpen || "F";
+    const unitBlock = (u) => {
+      const rows = cov.filter((c) => c.unit === u.id);
+      const ok = rows.filter((c) => c.modes.includes(mode));
+      return `<details class="course-unit glass" data-unit="${u.id}" ${open === u.id ? "open" : ""}>
+        <summary><span class="cu-letter">${u.id}</span><span class="cu-title">${esc(u.title)}</span><span class="cu-meta">${esc(tr("course.unitMeta", { n: rows.length, ready: ok.length }))}</span></summary>
+        <div class="cu-actions"><button type="button" class="btn btn-secondary btn-sm" data-course-mix="${u.id}" ${ok.length ? "" : "disabled"}>${esc(tr("course.mixUnit"))}</button></div>
+        <ul class="sub-list">${rows.map((c) => {
+          const s = st[c.id], has = c.modes.includes(mode);
+          const status = c.status === "missing" ? `<span class="chip chip-missing">${esc(tr("course.missing"))}</span>` : c.status === "partial" ? `<span class="chip chip-partial" title="${esc(tr("course.levels", { modes: c.modes.map((m) => tr("mode." + m)).join(", ") }))}">${esc(tr("course.partial"))}</span>` : "";
+          const mine = s ? `<span class="sub-mine">${esc(tr("course.mine", { right: s.right, n: s.n }))} · ${esc(rel(s.last))}</span>` : `<span class="sub-mine faint">${esc(tr("course.notYet"))}</span>`;
+          const lesson = c.lessons[0];
+          return `<li class="sub-row"><span class="sub-t"><b>${esc(c.title)}</b>${status}</span>${mine}
+            <span class="sub-act">${lesson ? `<button type="button" class="btn btn-link btn-sm" data-lesson="${lesson}">${esc(tr("prac.lesson"))}</button>` : ""}<button type="button" class="btn btn-sm ${has ? "btn-primary" : "btn-secondary"}" data-course-sub="${c.id}" ${has ? "" : `disabled title="${esc(tr("course.noLevel", { mode: tr("mode." + mode) }))}"`}>${esc(tr("course.practise"))}</button></span></li>`;
+        }).join("")}</ul></details>`;
+    };
+    $("#course-body").innerHTML = `
+      <section class="glass panel course-top">
+        <div class="ct-left"><span class="field-label" id="course-mode-l">${esc(tr("course.level"))}</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="course-mode-l" id="course-mode">${COURSE_MODES.map((m) => `<button type="button" role="radio" data-course-mode="${m}" aria-checked="${m === mode}" class="${m === mode ? "active" : ""}">${esc(tr("mode." + m))}</button>`).join("")}</div>
+          <p class="faint small">${esc(tr("course.fixed"))}</p></div>
+        <div class="ct-right"><button type="button" class="btn btn-primary" data-course-all="1">${esc(tr("course.full"))}</button>
+          <p class="faint small">${esc(tr("course.coverage", { impl, total: cov.length, lessons: withLessons }))} <a href="${window.Curriculum.SOURCE}" target="_blank" rel="noopener">${esc(tr("course.source"))}</a></p></div>
+      </section>
+      ${CU.UNITS.map(unitBlock).join("")}`;
+  }
+  function startCourse({ sub, unit, all }) {
+    const CU = window.Curriculum, mode = courseMode();
+    if (sub) { const c = CU.get(sub); return runPractice({ subs: [sub], level: mode, n: 6, title: c.title, crumb: `${tr("prac.tab.course")} · ${tr("mode." + mode)}`, onDone: () => navigate("course") }); }
+    if (unit) { const u = CU.UNITS.find((x) => x.id === unit); return runPractice({ subs: u.subs.map((s) => s.id), level: mode, n: 10, title: u.title, crumb: `${tr("course.mixUnit")} · ${tr("mode." + mode)}`, scope: "mixed", onDone: () => navigate("course") }); }
+    if (all) return runPractice({ subs: CU.SUBS.map((s) => s.id), level: mode, n: 20, title: tr("course.full"), crumb: `${tr("prac.tab.course")} · ${tr("mode." + mode)}`, scope: "mixed", onDone: () => navigate("course") });
+  }
+  function startDrill(conceptId, level, onDone) {
+    const c = window.Concepts.get(conceptId); if (!c) return;
+    runPractice({ conceptId, level, n: 5, title: conceptTitle(c), crumb: `${tr("prac.kicker")} · ${tr("mode." + level)}`, onDone });
+  }
+
+  // ───────── progress (tests, mastery, habits) ─────────
+  function renderProgressScreen() {
+    const history = getHistory();
+    const prefs = getPrefs();
+    const lv = TEST_LEVELS.includes(prefs.level) ? prefs.level : "normal";
+    const analyze = (h) => window.Insights.analyze(h, qOf, (it) => gradeItem(it).parts);
+    const quad = history.filter((a) => subjectOf(a) === "quadratics");
+    const core = analyze(quad.filter((a) => !isHard(levelOf(a))));
+    const atLevel = analyze(quad.filter((a) => levelOf(a) === lv));
+    const all = analyze(quad);
+    for (const b of $$("#level-pick button")) { const on = b.dataset.level === lv; b.classList.toggle("active", on); b.setAttribute("aria-checked", on); b.textContent = levelName(b.dataset.level); }
+    const ln = levelName(lv);
     $("#home-stats").innerHTML = `
       <div class="tile${all.count ? "" : " empty-tile"}"><span class="tile-value">${all.count || "—"}</span><span class="tile-label">tests taken</span></div>
       <div class="tile${atLevel.count ? "" : " empty-tile"}"><span class="tile-value">${atLevel.count ? atLevel.best.percent + "%" : "—"}</span><span class="tile-label">${esc(ln)} best</span></div>
       <div class="tile${atLevel.count ? "" : " empty-tile"}"><span class="tile-value">${atLevel.count ? atLevel.recentAvg + "%" : "—"}</span><span class="tile-label">${esc(ln)} average${atLevel.count ? `, last ${Math.min(5, atLevel.count)}` : ""}</span></div>
       <div class="tile${all.count ? "" : " empty-tile"}"><span class="tile-value">${all.count ? hoursMins(all.studySeconds) : "—"}</span><span class="tile-label">time practising</span></div>`;
-    renderTrend(atLevel, LEVELS[lv].label);
+    renderTrend(atLevel, ln);
     renderFocus();
     renderHabits(core);
     renderHistory(history);
     renderMastery();
+  }
+
+  // ───────── Study Room landing ─────────
+  function renderStudyRoom() {
+    const s = store.get(KEYS.room, null);
+    const r = s && window.Group.decodeRoom(s.code);
+    $("#room-resume-box").innerHTML = r ? `<button class="btn btn-secondary btn-block" type="button" data-go="room">${esc(tr("room.resume"))} · ${esc(r.code)}</button>` : "";
   }
 
   // Score trend: one series, 0–100% scale, best and latest labelled, hover tooltip.
@@ -367,7 +960,7 @@
     const el = $("#focus");
     const L = learningState();
     if (!L.records.length) {
-      el.innerHTML = `<p class="empty-note">No learning records yet. Take a practice test (Tim's Test makes a good diagnostic) or try a concept quiz in the <button class="btn-inline" data-go="library" type="button">Concept Library</button>, and your recommendations will appear here.</p>`;
+      el.innerHTML = `<p class="empty-note">No learning records yet. Try Simple guided practice or a Normal test, or a concept quiz in the <button class="btn-inline" data-go="library" type="button">Concept Library</button>, and your recommendations will appear here.</p>`;
       return;
     }
     const top = L.recs.filter((r) => r.status !== "not_attempted").slice(0, 3);
@@ -392,7 +985,7 @@
   function renderHabits(ins) {
     const el = $("#habits");
     if (!ins.count) { el.innerHTML = `<p class="empty-note">This tracks the habits that cost marks on written answers, like answers not in simplest form or extraneous roots you kept.</p>`; return; }
-    const sec = SECTIONS.map((s) => {
+    const sec = SECTIONS.filter((s) => ins.sections[s.key] && ins.sections[s.key].max).map((s) => {
       const v = ins.sections[s.key] || { earned: 0, max: 0 };
       const pct = v.max ? Math.round((v.earned / v.max) * 100) : 0;
       return `<div class="topic-row"><div class="topic-row-head"><span>${s.name}</span><span><b>${pct}%</b> <span class="muted">· ${fmtMarks(v.earned)}/${v.max} all time</span></span></div><div class="bar"><div class="bar-fill ${pct >= 85 ? "good" : pct >= 65 ? "mid" : "low"}" style="width:${pct}%"></div></div></div>`;
@@ -428,7 +1021,7 @@
         <tbody>
           ${recent.map((a) => `
             <tr data-id="${esc(a.id)}" tabindex="0" title="Review this test">
-              <td>${esc(niceDate(a.date))} <span class="pill pill-level ${levelOf(a)}">${esc(LEVELS[levelOf(a)].short)}</span>${a.group ? ' <span class="pill pill-group">Group</span>' : ""}${bestIds.has(a.id) ? ' <span class="pill pill-best">Best</span>' : ""}${a.timedOut ? ' <span class="pill">Timed out</span>' : ""}</td>
+              <td>${esc(niceDate(a.date))} <span class="pill pill-level ${levelOf(a)}">${esc(LEVELS[levelOf(a)] && !LEVELS[levelOf(a)].legacy ? levelName(levelOf(a)) : (LEVELS[levelOf(a)] || LEVELS.normal).short)}</span>${subjectOf(a) === "radicals" ? ' <span class="pill pill-legacy" title="Taken during the radicals unit">Radicals</span>' : ""}${a.group ? ' <span class="pill pill-group">Group</span>' : ""}${bestIds.has(a.id) ? ' <span class="pill pill-best">Best</span>' : ""}${a.timedOut ? ' <span class="pill">Timed out</span>' : ""}</td>
               <td><b>${a.percent}%</b> <span class="muted">${fmtMarks(a.earned)}/${a.total}</span></td>
               <td>${sec(a, "wr")}</td><td>${sec(a, "nr")}</td><td>${sec(a, "mc")}</td>
               <td>${clock(a.totalTime)}</td>
@@ -469,24 +1062,14 @@
   const wrItem = (q) => ({ kind: "wr", qid: q.id, responses: {}, work: "", time: 0, flagged: false });
   const nrItem = (q) => ({ kind: "nr", qid: q.id, response: "", time: 0, flagged: false });
   const mcItem = (q, rnd = Math.random) => ({ kind: "mc", qid: q.id, order: q.order ? q.order.slice() : shuffle(q.c.map((_, i) => i), rnd), chosen: null, time: 0, flagged: false });
-  // rnd is seeded for group tests, so every device builds the identical test
+  // rnd is seeded for group tests, so every device builds the identical test.
+  // Quadratics tests are generated and verified by QuadBank; the old radicals banks stay loaded for history.
   function buildTest(level = "normal", rnd = Math.random) {
-    const tier = nmTier(level);
-    if (tier) {
-      const t = window.Nightmare.build(tier, rnd);
-      for (const q of [...t.wr, ...t.nr, ...t.mc]) BANKS[q.parts ? "wr" : q.c ? "mc" : "nr"].set(q.id, q);
-      return [...t.wr.map(wrItem), ...t.nr.map(nrItem), ...t.mc.map((q) => mcItem(q, rnd))];
-    }
-    if (level === "classmate") return [...CM.wr.map(wrItem), ...CM.nr.map(nrItem), ...CM.mc.map((q) => mcItem(q))];
-    const wr = level === "challenge" ? CHW : WRB, nr = level === "challenge" ? CHN : NRB, mc = level === "challenge" ? CHM : MCB;
-    const items = [];
-    for (const slot of window.WR_SLOTS) {
-      const pool = wr.filter((q) => q.slot === slot.slot);
-      items.push(wrItem(pool[Math.floor(rnd() * pool.length)]));
-    }
-    for (const q of spread(nr, 5, rnd)) items.push(nrItem(q));
-    for (const q of spread(mc, 10, rnd)) items.push(mcItem(q, rnd));
-    return items;
+    const QB = window.QuadBank;
+    const reg = (q, kind) => { BANKS[kind].set(q.id, q); return q; };
+    if (level === "nightmare") return QB.buildNightmare(rnd).map((q) => wrItem(reg(q, "wr")));
+    const t = QB.buildTest(level === "challenge" ? "challenge" : "normal", rnd);
+    return [...t.wr.map((q) => wrItem(reg(q, "wr"))), ...t.nr.map((q) => nrItem(reg(q, "nr"))), ...t.mc.map((q) => mcItem(reg(q, "mc"), rnd))];
   }
 
   const qOf = (item) => BANKS[item.kind].get(item.qid);
@@ -498,11 +1081,12 @@
   }
   const totalParts = (item) => item.kind === "wr" ? qOf(item).parts.length : 1;
   const isAnswered = (item) => answeredParts(item) === totalParts(item);
-  function labelOf(i, items = session.items) {
+  function labelOf(i, items = session.items, level = session ? session.level : null) {
     const item = items[i];
-    const sec = SECTIONS.find((s) => s.key === item.kind);
+    const sec = sectionsOf(items).find((s) => s.key === item.kind);
     const n = items.slice(0, i + 1).filter((x) => x.kind === item.kind).length;
-    return { sec, n, text: item.kind === "wr" ? `Q${n}` : `${sec.short} ${n}` };
+    const stage = level === "nightmare" || (item.qid && /-nm\d-/.test(item.qid));
+    return { sec, n, text: stage ? tr("test.stage", { n }) : item.kind === "wr" ? `Q${n}` : `${sec.short} ${n}` };
   }
 
   // opts.group = decoded group code + name → seeded questions and (optionally) a shared clock
@@ -510,7 +1094,7 @@
     const now = Date.now();
     const g = opts.group || null;
     const level = g ? g.level : opts.level || getPrefs().level;
-    if (!LEVELS[level]) { if (/^nightmare/.test(level || "")) return openSetup({ nightmare: true }); return startTest({ ...opts, level: "normal" }); }
+    if (!TEST_LEVELS.includes(level)) return startTest({ ...opts, level: /^nightmare/.test(level || "") ? "nightmare" : "normal" });
     const scheduled = !!(g && g.start);
     const prefs = getPrefs();
     const minutes = g ? g.minutes || 60 : opts.minutes || prefs.minutes || 60;
@@ -519,7 +1103,7 @@
       id: now.toString(36) + Math.random().toString(36).slice(2, 6),
       startedAt: scheduled ? g.start : now,
       elapsed: scheduled ? Math.max(0, (now - g.start) / 1000) : 0,
-      lastActive: now, paused: false, pauses: 0, level,
+      lastActive: now, paused: false, pauses: 0, level, subject: "quadratics",
       group: g ? { code: g.code, name: g.name || "", start: g.start, scheduled } : null,
       items: buildTest(level, g ? window.Group.rng(g.seed) : Math.random),
       current: 0, mode: prefs.buddyMode, buddy: null,
@@ -529,8 +1113,36 @@
       companion: fireOn && window.Companion ? (() => { const c = window.Companion.normalize(prefs.companion || window.Companion.full()); return c.any ? c : null; })() : null, // campfire on = full minigame unless customised
       gameOvers: 0, turnedOff: false,
     };
+    if (prefs.goose) gooseRules(session);
     saveSession();
     enterTest();
+  }
+  // ───────── Goose Mode ↔ puppy survival: mutually exclusive rulesets inside a test ─────────
+  // The puppy's settings are put aside (not lost) while the goose is in charge, then given back.
+  function gooseRules(sess) {
+    if (sess.goose || sess.demo) return;
+    sess.preGoose = { mode: sess.mode, hardcore: sess.hardcore, drain: sess.drain, companion: sess.companion, buddy: sess.buddy || null, turnedOff: !!sess.turnedOff, buddyAtOff: sess.buddyAtOff || null, gameOver: sess.gameOver || null };
+    Object.assign(sess, { goose: true, mode: "off", hardcore: false, drain: false, companion: null, buddy: null, gameOver: null });
+  }
+  function puppyRules(sess) {
+    if (!sess.goose) return;
+    const p = sess.preGoose || {};
+    Object.assign(sess, { goose: false, mode: p.mode || "off", hardcore: !!p.hardcore, drain: !!p.drain, companion: p.companion || null, buddy: p.buddy || null, turnedOff: !!p.turnedOff, buddyAtOff: p.buddyAtOff || null });
+    delete sess.preGoose;
+  }
+  // A live test follows the current Goose setting (also when an unfinished test is resumed after the setting changed).
+  function syncGooseSession() {
+    if (!session || session.demo) return;
+    const want = !!getPrefs().goose;
+    if (want === !!session.goose) return;
+    if (fire) { saveSession(); fire.stop(); }
+    if (want) {
+      if (session.gameOver) { $("#gameover").hidden = true; $("#screen-test").inert = false; $("#topbar-test").inert = false; }
+      gooseRules(session);
+    } else puppyRules(session);
+    buildBuddy();
+    if (!session.paused) { fire.start(); }
+    saveSession();
   }
   function resumeTest() {
     const saved = savedSession();
@@ -546,13 +1158,34 @@
   function enterTest() {
     show("test");
     document.body.classList.toggle("buddy-off", session.mode === "off");
-    const tier = nmTier(session.level);
-    $("#tb-level").hidden = !tier;
-    if (tier) { $("#tb-level").textContent = `☠ ${window.Nightmare.TIERS[tier].name} · ${window.Nightmare.TIERS[tier].label}`; $("#tb-level").dataset.tier = tier; }
+    // the mode is always on show; legacy (radicals) sessions keep their old names
+    $("#tb-level").hidden = !!session.demo;
+    $("#tb-level").textContent = `${/^nightmare/.test(session.level) ? "☠ " : ""}${levelName(session.level)}`;
+    $("#tb-level").dataset.level = session.level;
     // A scheduled group test shares one clock, so it can't be paused
     $("#btn-pause").hidden = !!(session.group && session.group.scheduled);
-    $("#seg-bar").innerHTML = SECTIONS.map((s) => `<span class="seg" style="flex:${s.count}" title="${s.name}"><span class="seg-fill" data-sec="${s.key}"></span></span>`).join("");
+    $("#seg-bar").innerHTML = sectionsOf(session.items).map((s) => `<span class="seg" style="flex:${s.count}" title="${s.name}"><span class="seg-fill" data-sec="${s.key}"></span></span>`).join("");
 
+    buildBuddy();
+
+    ensurePad();
+    if (pad) { pad.avoidLeft = !!(fire && fire.comp && fire.comp.on); if (pad._place) pad._place(); }
+    renderQuestion();
+    lastTick = Date.now();
+    clearInterval(timerId);
+    timerId = setInterval(tick, 250);
+    if (session.mode === "off" && session.turnedOff) document.body.classList.add("buddy-off");
+    if (session.paused) showPause();
+    else if (session.gameOver) { const k = session.gameOver; session.gameOver = null; session.gameOvers--; fire.status = k; fire.render(); showGameOver(k); }
+    else { fire.start(); if (pad) pad.show(); }
+    syncGooseSession();
+    tick();
+    maybeGameTutorial();
+  }
+
+  // The campfire (or nothing, under Goose rules / No campfire) for the current session
+  function buildBuddy() {
+    document.body.classList.toggle("buddy-off", session.mode === "off");
     const slot = $("#test-scene");
     slot.innerHTML = "";
     const scene = makeScene();
@@ -576,22 +1209,7 @@
     const ck = compOn ? [["vent", "V", "vent"], ["oxygen", "O", "bellows"], ["kettle", "K", "valve"], ["tent", "T", "tent"]].filter(([m]) => session.companion.mech[m]).map(([, k, t]) => `<kbd>${k}</kbd> ${t}`) : [];
     $("#kbd-comp").innerHTML = ck.length ? " · " + ck.join(" · ") : "";
     $("#btn-fire-off").hidden = session.mode === "off" || !!session.demo;
-
-    if (!pad && window.Scratchpad) {
-      pad = new window.Scratchpad($("#scratchpad"));
-      pad.onChange = () => { if (session && session.demo) return; clearTimeout(pad._saveT); pad._saveT = setTimeout(saveSession, 500); };
-    }
-
-    if (pad) { pad.avoidLeft = !!(fire && fire.comp && fire.comp.on); if (pad._place) pad._place(); }
-    renderQuestion();
-    lastTick = Date.now();
-    clearInterval(timerId);
-    timerId = setInterval(tick, 250);
-    if (session.mode === "off" && session.turnedOff) document.body.classList.add("buddy-off");
-    if (session.paused) showPause();
-    else if (session.gameOver) { const k = session.gameOver; session.gameOver = null; session.gameOvers--; fire.status = k; fire.render(); showGameOver(k); }
-    else { fire.start(); if (pad) pad.show(); }
-    tick();
+    if (pad) pad.avoidLeft = !!(fire && fire.comp && fire.comp.on);
   }
 
   function tick() {
@@ -599,7 +1217,8 @@
     const now = Date.now();
     const dt = (now - lastTick) / 1000;
     lastTick = now;
-    if (!session.paused && !session.demo) {
+    const gooseHold = !!(window.Goose && window.Goose.frozen());
+    if (!session.paused && !session.demo && !tutorialHold && !gooseHold) {
       if (session.group && session.group.scheduled) session.elapsed = Math.max(0, (now - session.group.start) / 1000); // everyone shares one clock
       else if (!session.gameOver) session.elapsed += dt * drainRate();
       session.items[session.current].time += dt;
@@ -607,7 +1226,7 @@
     }
     const left = durOf(session) - session.elapsed;
     $("#timer-value").textContent = clock(left);
-    const rate = session.paused || session.gameOver ? 1 : drainRate();
+    const rate = session.paused || session.gameOver || tutorialHold ? 1 : drainRate();
     const badge = $("#drain-badge");
     badge.hidden = rate === 1;
     if (rate > 1) { badge.textContent = `×${rate}`; badge.dataset.rate = rate; }
@@ -627,9 +1246,9 @@
     session.gameOvers = (session.gameOvers || 0) + 1;
     if (fire) fire.stop();
     if (pad) pad.hide();
-    const burnt = kind === "burnt";
-    $("#go-icon").textContent = burnt ? "🔥" : "🧊";
-    $("#go-title").textContent = burnt ? "The camp burned down." : "Your puppy froze solid.";
+    const GO = { burnt: ["🔥", "The camp burned down."], frozen: ["🧊", "Your puppy froze solid."], kettle: ["💥", "The kettle blew."], oxygen: ["◌", "The fire ran out of oxygen."] }[kind] || ["🔥", "Game over."];
+    $("#go-icon").textContent = GO[0];
+    $("#go-title").textContent = GO[1];
     $("#go-text").textContent = (session.group && session.group.scheduled)
       ? "Math comes first: your answers are safe and your mark isn't affected. (The group clock keeps running.)"
       : "Math comes first: your answers are safe and your mark isn't affected. The clock is stopped while you decide.";
@@ -706,6 +1325,7 @@
     if (fire) fire.start();
     if (pad) pad.show();
     saveSession();
+    maybeGameTutorial();
   }
   function pauseToHome() {
     saveSession();
@@ -713,6 +1333,8 @@
     goHome();
   }
   function teardownTest() {
+    tutorialHold = false;
+    if (window.Tour && window.Tour.active && window.Tour.id === "game") window.Tour.end("replaced");
     clearInterval(timerId); timerId = null;
     if (fire) { fire.destroy(); fire = null; }
     if (pad) pad.hide();
@@ -727,10 +1349,11 @@
   function renderProgress() {
     const n = session.items.length;
     const answered = session.items.filter(isAnswered).length;
-    const { sec, n: k } = labelOf(session.current);
-    $("#q-counter").textContent = `${sec.name} · ${session.items[session.current].kind === "wr" ? "Q" : "#"}${k} of ${sec.count}`;
-    $("#answered-counter").textContent = `${answered}/${n} answered`;
-    for (const s of SECTIONS) {
+    const { sec, n: k, text } = labelOf(session.current);
+    $("#q-counter").textContent = session.level === "nightmare" ? `${text} / ${sec.count}` : tr("test.counter", { s: sec.name, q: session.items[session.current].kind === "wr" ? "Q" : "#", k, n: sec.count });
+    $("#answered-counter").textContent = tr("test.answered", { a: answered, n });
+    $("#navpop-count").textContent = `${answered}/${n}`;
+    for (const s of sectionsOf(session.items)) {
       const xs = session.items.filter((it) => it.kind === s.key);
       const f = $(`.seg-fill[data-sec="${s.key}"]`);
       if (f) f.style.width = `${(xs.filter(isAnswered).length / xs.length) * 100}%`;
@@ -738,14 +1361,15 @@
   }
 
   function renderNav() {
-    $("#nav-grid").innerHTML = SECTIONS.map((sec) => {
+    const stageNames = session.level === "nightmare";
+    $("#nav-grid").innerHTML = sectionsOf(session.items).map((sec) => {
       const cells = session.items.map((it, i) => ({ it, i })).filter((x) => x.it.kind === sec.key).map(({ it, i }, k) => {
         const done = isAnswered(it), some = !done && answeredParts(it) > 0;
         return `<button type="button" class="nav-cell${i === session.current ? " current" : ""}${done ? " answered" : ""}${some ? " partial" : ""}${it.flagged ? " flagged" : ""}"
-          data-i="${i}" aria-label="${sec.name} ${k + 1}${done ? ", answered" : some ? ", partly answered" : ""}${it.flagged ? ", flagged" : ""}">${sec.key === "wr" ? "Q" : ""}${k + 1}</button>`;
+          data-i="${i}" aria-label="${stageNames ? tr("test.stage", { n: k + 1 }) : `${sec.name} ${k + 1}`}${done ? ", answered" : some ? ", partly answered" : ""}${it.flagged ? ", flagged" : ""}">${stageNames ? "S" : sec.key === "wr" ? "Q" : ""}${k + 1}</button>`;
       }).join("");
       if (!cells) return "";
-      return `<div class="nav-section"><div class="nav-section-head"><span>${sec.name}</span><span class="muted">${sec.marks} marks</span></div><div class="nav-cells${sec.key === "mc" ? " wide" : ""}">${cells}</div></div>`;
+      return `<div class="nav-section"><div class="nav-section-head"><span>${stageNames ? "Nightmare gauntlet" : sec.name}</span><span class="muted">${sec.marks} marks</span></div><div class="nav-cells${sec.key === "mc" ? " wide" : ""}">${cells}</div></div>`;
     }).join("");
   }
 
@@ -759,7 +1383,8 @@
     $("#q-label").textContent = `${text} · ${marks} mark${marks > 1 ? "s" : ""}`;
     const flag = $("#btn-flag");
     flag.setAttribute("aria-pressed", item.flagged);
-    flag.textContent = item.flagged ? "⚑ Flagged" : "⚐ Flag";
+    flag.textContent = item.flagged ? `⚑ ${tr("test.flagged")}` : `⚐ ${tr("test.flag")}`;
+    renderHint(item, q);
 
     const body = $("#q-body");
     if (item.kind === "mc") {
@@ -789,12 +1414,14 @@
           <summary>Type out your steps <span class="muted">(optional — saved with your review)</span></summary>
           <textarea class="work-input" data-field="work" rows="5" placeholder="Write your steps here, or use the scratchpad. Your teacher marks the steps — practise showing them!">${esc(item.work || "")}</textarea>
         </details>
-        <p class="input-help">Type <kbd>√</kbd> with the buttons or as <code>sqrt</code>. Examples: <code>3√2</code>, <code>(6+2√5)/7</code>, <code>∛(-40)</code>. For equations, list solutions like <code>2, -3</code> or type <code>none</code>.</p>`;
+        <p class="input-help">${q.parts.some((p) => ["equation", "point"].includes(p.kind)) ? esc(tr("test.equationHelp")) + " " : ""}${q.parts.some((p) => p.kind === "plot") ? esc(tr("test.plotHelp")) + " " : ""}${q.parts.some((p) => ["set", "expr"].includes(p.kind)) ? "Exact values: type <kbd>√</kbd> with the buttons or as <code>sqrt</code>, e.g. <code>(3+√5)/2</code>. List several solutions like <code>2, -3</code>, or type <code>none</code>." : ""}</p>`;
       for (const inp of $$("[data-part]", body)) updatePreview(inp);
+      hydratePlots(body, item.responses, (key, v) => { item.responses[key] = v; renderProgress(); renderNav(); clearTimeout(onInput._t); onInput._t = setTimeout(saveSession, 300); }, false);
     }
 
     if (!item.sketch) item.sketch = [];
-    if (pad) pad.setPage(item.sketch, text);
+    if (pad) pad.setPage(item.sketch, text, item);
+    renderTestInfo(q);
     $("#btn-prev").disabled = session.current === 0;
     $("#btn-next").disabled = session.current === session.items.length - 1;
     renderProgress();
@@ -810,9 +1437,19 @@
           ${p.choices.map((c) => `<button type="button" role="radio" data-choice="${esc(p.key)}" data-value="${esc(c)}" class="${val === c ? "active" : ""}" aria-checked="${val === c}">${esc(c)}</button>`).join("")}
         </div></div>`;
     }
-    const ph = { set: "e.g.  2, -3   or   none", restriction: "e.g.  x ≥ 3", number: "e.g.  3.97" }[p.kind] || "e.g.  3√2   or   (6+2√5)/7";
-    const keys = p.kind === "restriction" ? ["≥", "≤", ">", "<", "/"] : p.kind === "number" ? ["π", "/", "(", ")"] : ["√", "∛", "∜", "π", "(", ")", "/"];
-    const titles = { "√": "Square root", "∛": "Cube root", "∜": "Fourth root", "π": "Pi", "(": "Open bracket", ")": "Close bracket", "/": "Divide", "≥": "Greater than or equal", "≤": "Less than or equal", ">": "Greater than", "<": "Less than" };
+    if (p.kind === "plot") {
+      return `<div class="wr-part plot-part">${head}<div class="plot-host" data-plot="${esc(p.key)}" data-win="${esc(JSON.stringify(p.window || {}))}"></div></div>`;
+    }
+    // build a parabola on an empty grid (the key is never drawn before the answer is marked)
+    if (p.kind === "graph") {
+      return `<div class="wr-part plot-part graph-part">${head}<div class="plot-host" data-plot="${esc(p.key)}" data-builder="1" data-win="${esc(JSON.stringify(p.window || {}))}"></div></div>`;
+    }
+    const ph = { set: "e.g.  2, -3   or   none", restriction: "e.g.  x ≥ 3", number: "e.g.  3.97", point: "e.g.  (3, -2)", equation: "e.g.  y = 2(x - 3)^2 + 1",
+      poly: p.form === "factored" ? "e.g.  (x - 2)(3x + 1)" : p.form === "simplified" ? "e.g.  (x + 1)/(x - 3)" : "e.g.  2x^2 - 12x + 23", mono: p.form === "radical" ? "e.g.  root(x^3, 4)" : p.form === "power" ? "e.g.  x^(3/4)" : "e.g.  8a^9/b^6",
+      interval: "e.g.  (-inf, 3] U [5, inf)   or   x ≤ 3 or x ≥ 5", approx: `e.g.  ${p.dp === 1 ? "12.4" : p.dp === 0 ? "12" : "12.47"}` }[p.kind] || "e.g.  3√2   or   (6+2√5)/7";
+    const keys = p.kind === "restriction" ? ["≥", "≤", ">", "<", "/"] : p.kind === "number" ? ["/", "(", ")", "√"] : p.kind === "point" ? ["(", ")", ",", "/", "√"] : p.kind === "equation" ? ["x", "x²", "(", ")", "/"]
+      : p.kind === "poly" ? ["x", "x²", "^", "(", ")", "/"] : p.kind === "mono" ? ["^", "(", ")", "/", "√"] : p.kind === "interval" ? ["(", ")", "[", "]", "∞", "∪", "≤", "≥"] : p.kind === "approx" ? ["."] : ["√", "∛", "∜", "π", "(", ")", "/"];
+    const titles = { "√": "Square root", "∛": "Cube root", "∜": "Fourth root", "π": "Pi", "(": "Open bracket", ")": "Close bracket", "/": "Divide", "≥": "Greater than or equal", "≤": "Less than or equal", ">": "Greater than", "<": "Less than", ",": "Comma", "x": "x", "x²": "x squared", "^": "Power", "[": "Open (included)", "]": "Close (included)", "∞": "Infinity", "∪": "Union", ".": "Decimal point" };
     return `<div class="wr-part">${head}
       <div class="input-row">
         <input class="answer-input" type="text" data-part="${esc(p.key)}" data-kind="${p.kind}" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(val)}" placeholder="${ph}" aria-label="Answer ${esc(p.label || "")}" />
@@ -829,8 +1466,8 @@
     const v = inp.value.trim();
     if (!v) { box.innerHTML = ""; box.className = "preview"; return; }
     const k = inp.dataset.kind;
-    const r = k === "set" ? Check.readSet(v) : k === "restriction" ? Check.readRestriction(v) : Check.read(v);
-    if (r.ok) { box.className = "preview ok"; box.innerHTML = `<span class="muted">Reads as</span> ${tex(r.tex)}`; }
+    const r = k === "set" ? Check.readSet(v) : k === "restriction" ? Check.readRestriction(v) : window.QuadCheck && window.QuadCheck.handles(k) ? window.QuadCheck.read(k, v) : window.AnswerCheck && window.AnswerCheck.handles(k) ? window.AnswerCheck.read(k, v) : Check.read(v);
+    if (r.ok) { box.className = "preview ok"; box.innerHTML = `<span class="muted">${esc(tr("test.readsAs"))}</span> ${tex(r.tex)}`; }
     else { box.className = "preview err"; box.textContent = `⚠ ${r.error}`; }
   }
 
@@ -847,6 +1484,77 @@
     renderNav();
     clearTimeout(onInput._t);
     onInput._t = setTimeout(saveSession, 400);
+  }
+
+  // ───────── plots: interactive in a test or practice, static (with the key) in a review ─────────
+  function hydratePlots(root, responses, onChange, disabled) {
+    if (!window.Graph) return;
+    for (const host of $$("[data-plot]", root)) {
+      let win = null; try { win = JSON.parse(host.dataset.win); } catch { /* default */ }
+      if (host.dataset.builder) {
+        window.Graph.builder(host, { window: win && win.x0 !== undefined ? win : undefined, value: responses[host.dataset.plot] || "", disabled, onChange: (v) => onChange(host.dataset.plot, v),
+          labels: { vertex: tr("graph.vertex"), points: tr("graph.points"), draw: tr("graph.draw"), undraw: tr("graph.undraw"), reset: tr("graph.reset"), hintVertex: tr("graph.hintVertex"), hintPoints: tr("graph.hintPoints"), count: tr("graph.count"), axis: tr("graph.axis") } });
+        continue;
+      }
+      window.Graph.plotter(host, { window: win && win.x0 !== undefined ? win : undefined, value: responses[host.dataset.plot] || "", disabled, onChange: (v) => onChange(host.dataset.plot, v),
+        labels: { vertex: "Vertex", point: "Point", reset: "Reset" } });
+    }
+  }
+  // ───────── hints: what each mode allows ─────────
+  const hintPolicy = (lv) => (session && session.demo ? "steps" : HINT_POLICY[lv] || "none");
+  function renderHint(item, q) {
+    const pol = hintPolicy(session.level), hints = (q.hints || []).filter(Boolean);
+    const allowed = pol === "none" ? 0 : pol === "one" ? Math.min(1, hints.length) : hints.length;
+    const used = Math.min(item.hints || 0, allowed);
+    const btn = $("#btn-hint"), box = $("#hint-box");
+    btn.hidden = !hints.length || pol === "none";
+    btn.disabled = used >= allowed;
+    $("#hint-label").textContent = used ? `${tr("test.hintMore")} (${used}/${allowed})` : tr("test.hint");
+    btn.title = pol === "none" ? tr("test.hintsOff") : "";
+    box.hidden = !used;
+    box.innerHTML = used ? `<ol class="hint-list">${hints.slice(0, used).map((h) => `<li>${renderMath(h)}</li>`).join("")}</ol>` : "";
+    if (pol === "none" && session.level === "nightmare") { btn.hidden = true; }
+  }
+  function useHint() {
+    if (!session || session.paused) return;
+    const item = session.items[session.current], q = qOf(item);
+    const pol = hintPolicy(session.level), n = (q.hints || []).length;
+    const allowed = pol === "none" ? 0 : pol === "one" ? Math.min(1, n) : n;
+    if ((item.hints || 0) >= allowed) return;
+    item.hints = (item.hints || 0) + 1;
+    saveSession();
+    renderHint(item, q);
+  }
+  // Focus layout keeps the question navigator tucked away until asked for
+  function setNavPop(open) {
+    document.body.classList.toggle("navpop-open", open);
+    $("#btn-navpop").setAttribute("aria-expanded", String(open));
+    if (open) { const cur = $("#nav-grid .nav-cell.current") || $("#nav-grid .nav-cell"); if (cur) cur.focus(); }
+  }
+  // ───────── Studio: formula reference for the concepts in this question ─────────
+  function renderTestInfo(q) {
+    const el = $("#test-info"); if (!el) return;
+    const cids = window.Concepts.conceptsFor(q);
+    const fs = (window.Concepts.FORMULAS || []).filter((f) => f.related.some((r) => cids.includes(r))).slice(0, 4);
+    el.innerHTML = fs.length ? `<p class="ti-k">${esc(tr("lib.formulas"))}</p>${fs.map((f) => `<div class="ti-f"><span class="ti-n">${esc(f.name)}</span><div class="ti-tex">${tex(f.tex, true)}</div><span class="ti-w">${esc(f.when)}</span></div>`).join("")}` : "";
+  }
+  // ───────── scratchpad: per question in a test, one general page elsewhere ─────────
+  function ensurePad() {
+    if (!pad && window.Scratchpad) {
+      pad = new window.Scratchpad($("#scratchpad"));
+      pad.onChange = () => {
+        if (session && session.demo) return;
+        if (session) { clearTimeout(pad._saveT); pad._saveT = setTimeout(saveSession, 500); }
+        else if (pad.page && pad.page.general) { clearTimeout(pad._saveT); pad._saveT = setTimeout(() => store.set(KEYS.pad, { strokes: pad.strokes, notes: pad.page.notes || "" }), 400); }
+      };
+    }
+    return pad;
+  }
+  function usePadGeneral() {
+    if (!ensurePad()) return;
+    const saved = store.get(KEYS.pad, { strokes: [], notes: "" });
+    const page = { general: true, notes: saved.notes || "" };
+    pad.setPage(Array.isArray(saved.strokes) ? saved.strokes : [], tr("pad.general"), page);
   }
 
   function choose(orig) {
@@ -894,10 +1602,11 @@
     const items = session.items.map((it) => { const g = gradeItem(it); return { ...it, time: Math.round(it.time * 10) / 10, earned: g.earned, max: g.max }; });
     const earned = items.reduce((s, it) => s + it.earned, 0);
     const sections = {};
-    for (const sec of SECTIONS) {
+    for (const sec of sectionsOf(items)) {
       const xs = items.filter((it) => it.kind === sec.key);
       sections[sec.key] = { earned: xs.reduce((s, it) => s + it.earned, 0), max: xs.reduce((s, it) => s + it.max, 0) };
     }
+    const total = items.reduce((s, it) => s + it.max, 0);
     const elapsed = Math.min(durOf(session), session.elapsed);
     const sumTime = items.reduce((s, it) => s + it.time, 0);
     let buddy = { mode: session.mode, fires: 0, freezes: 0, logs: 0, cozyPercent: 100 };
@@ -908,11 +1617,12 @@
       buddy = { mode: session.mode, fires: s.fires, freezes: s.freezes, logs: s.logs, cozyPercent: s.totalSeconds ? Math.round((s.cozySeconds / s.totalSeconds) * 100) : 100 };
     }
     return {
-      id: session.id, date: Date.now(), total: TOTAL_MARKS, earned, percent: Math.round((earned / TOTAL_MARKS) * 1000) / 10,
+      id: session.id, date: Date.now(), total, earned, percent: total ? Math.round((earned / total) * 1000) / 10 : 0,
+      subject: session.subject || "radicals", hintsUsed: items.reduce((s, it) => s + (it.hints || 0), 0),
       sections, totalTime: Math.round(elapsed), avgTime: Math.round((sumTime / items.length) * 10) / 10,
       timedOut, pauses: session.pauses || 0, buddy, items,
       level: session.level || "normal",
-      duration: durOf(session), hardcore: !!session.hardcore, drain: !!session.drain, gameOvers: session.gameOvers || 0,
+      duration: durOf(session), hardcore: !!session.hardcore, drain: !!session.drain, gameOvers: session.gameOvers || 0, goose: !!session.goose,
       group: session.group ? { code: session.group.code, name: session.group.name, scheduled: session.group.scheduled, friends: [] } : null,
     };
   }
@@ -943,7 +1653,7 @@
     reviewFilter = "all";
     show("results");
 
-    const lvName = LEVELS[levelOf(attempt)].label;
+    const lvName = levelName(levelOf(attempt));
     const h = getHistory().filter((a) => levelOf(a) === levelOf(attempt));
     const ranked = h.slice().sort(compareAttempts);
     const rank = ranked.findIndex((a) => a.id === attempt.id) + 1;
@@ -952,7 +1662,7 @@
 
     $("#results-eyebrow").textContent = fresh ? (attempt.timedOut ? "Time's up!" : "Test complete") : "Past test";
     $("#results-title").textContent = p >= 90 ? "Outstanding." : p >= 75 ? "Strong work." : p >= 60 ? "Solid — keep pushing." : p >= 40 ? "Good practice. Review below." : "Every test teaches something.";
-    $("#results-date").textContent = `${lvName}${levelOf(attempt) === "classmate" ? " (by Tim)" : ""} test · taken ${niceDate(attempt.date)}${attempt.pauses ? ` · paused ${attempt.pauses}×` : ""}${attempt.group ? ` · group ${attempt.group.code}` : ""}`;
+    $("#results-date").textContent = `${lvName} test${subjectOf(attempt) === "radicals" ? " (radicals unit)" : ""} · taken ${niceDate(attempt.date)}${attempt.pauses ? ` · paused ${attempt.pauses}×` : ""}${attempt.group ? ` · group ${attempt.group.code}` : ""}${attempt.hintsUsed ? ` · ${tr("test.hintsUsed", { n: attempt.hintsUsed })}` : ""}`;
 
     const banner = $("#best-banner");
     let html, kind = "info";
@@ -974,7 +1684,7 @@
 
     const times = attempt.items.map((it) => it.time);
     const maxT = Math.max(...times), minT = Math.min(...times);
-    const lab = (i) => labelOf(i, attempt.items).text;
+    const lab = (i) => labelOf(i, attempt.items, levelOf(attempt)).text;
     const unanswered = attempt.items.filter((it) => answeredParts(it) === 0).length;
     $("#stat-grid").innerHTML = `
       <div class="stat stat-score">
@@ -987,7 +1697,7 @@
       <div class="stat"><span class="stat-value">${dur(minT)}</span><span class="stat-label">quickest (${lab(times.indexOf(minT))})</span></div>
       <div class="stat"><span class="stat-value">${unanswered}</span><span class="stat-label">left blank</span></div>`;
 
-    const secHTML = SECTIONS.map((sec) => {
+    const secHTML = sectionsOf(attempt.items).map((sec) => {
       const s = attempt.sections[sec.key] || { earned: 0, max: sec.marks };
       const pct = s.max ? Math.round((s.earned / s.max) * 100) : 0;
       const tsec = attempt.items.filter((it) => it.kind === sec.key).reduce((a, it) => a + it.time, 0);
@@ -1008,10 +1718,14 @@
     $("#topic-breakdown").innerHTML = `${secHTML}<h3 class="sub-h">By topic <span class="muted small">(weakest first)</span></h3>${topHTML}`;
 
     const b = attempt.buddy || { mode: "off" };
+    const noBuddy = b.mode === "off" && !b.turnedOff && !attempt.goose;
+    $("#buddy-card").hidden = noBuddy; $("#results-grid").classList.toggle("solo", noBuddy);
     let verdict;
-    if (b.turnedOff) verdict = "🧯 You turned the campfire off partway through to focus on the math. Smart call.";
+    if (attempt.goose) verdict = "🪿 Goose Mode: no campfire to tend this time — just the goose and its mischief.";
+    else if (b.turnedOff) verdict = "🧯 You turned the campfire off partway through to focus on the math. Smart call.";
     else if (b.mode === "off") verdict = "This test was taken in No campfire mode.";
     else if (attempt.gameOvers) verdict = `💀 Game over ${attempt.gameOvers === 1 ? "once" : attempt.gameOvers + " times"} — but you kept going with the test. Math first!`;
+    else if (b.kettleDeaths || b.oxygenDeaths) verdict = `💥 ${[b.kettleDeaths ? `The kettle blew ${b.kettleDeaths === 1 ? "once" : b.kettleDeaths + " times"}` : "", b.oxygenDeaths ? `the fire smothered ${b.oxygenDeaths === 1 ? "once" : b.oxygenDeaths + " times"}` : ""].filter(Boolean).join(" and ")}. Keep an eye on the valve and the bellows!`;
     else if (!b.fires && !b.freezes && b.cozyPercent >= 80) verdict = "🐶 Your puppy had a perfect night. Warm, cozy, and proud of you.";
     else if (!b.fires && !b.freezes) verdict = "🐶 No disasters — but your puppy got a little chilly or toasty at times.";
     else if (b.fires && b.freezes) verdict = "🐶 Fire <i>and</i> ice. Your puppy has been through a lot tonight.";
@@ -1024,7 +1738,7 @@
         <div><span class="stat-value">${b.fires}</span><span class="stat-label">fires</span></div>
         <div><span class="stat-value">${b.freezes}</span><span class="stat-label">freezes</span></div>
       </div>
-      ${b.companion ? `<p class="small comp-report">Companion: ${b.companion.events} event${b.companion.events === 1 ? "" : "s"} weathered${b.companion.windShifts ? ` · ${b.companion.windShifts} wind shift${b.companion.windShifts === 1 ? "" : "s"}` : ""}${b.companion.lidPops ? ` · ${b.companion.lidPops} kettle pop${b.companion.lidPops === 1 ? "" : "s"}` : ""}${b.companion.hailHits ? ` · ${b.companion.hailHits} hail bump${b.companion.hailHits === 1 ? "" : "s"}` : ""}${b.companion.tentSeconds ? ` · ${b.companion.tentSeconds}s of puppy naps in the tent` : ""}.</p>` : ""}
+      ${b.companion ? `<p class="small comp-report">Companion: ${b.companion.events} event${b.companion.events === 1 ? "" : "s"} weathered${b.companion.windShifts ? ` · ${b.companion.windShifts} wind shift${b.companion.windShifts === 1 ? "" : "s"}` : ""}${b.companion.lidPops ? ` · ${b.companion.lidPops} kettle blowout${b.companion.lidPops === 1 ? "" : "s"}` : ""}${b.companion.hailHits ? ` · ${b.companion.hailHits} hail bump${b.companion.hailHits === 1 ? "" : "s"}` : ""}${b.companion.tentSeconds ? ` · ${b.companion.tentSeconds}s of puppy naps in the tent` : ""}.</p>` : ""}
       <p class="muted small">Mode: ${esc(window.Campfire.MODES[b.mode]?.label || b.mode)}. The buddy never affects your mark.</p>`}`;
 
     renderGroupBoard(attempt);
@@ -1033,16 +1747,38 @@
   }
 
   function keyTeX(p) {
+    if (window.QuadCheck && window.QuadCheck.handles(p.kind)) return p.kind === "plot" ? plotSVG(null, p) : tex(window.QuadCheck.keyTeX(p));
+    if (p.kind === "graph") return plotSVG(null, p);
+    if (window.AnswerCheck && window.AnswerCheck.handles(p.kind)) return tex(window.AnswerCheck.keyTeX(p));
     return p.kind === "choice" ? esc(p.answer)
       : p.kind === "set" ? (p.answer.length ? tex(p.answer.map((x) => `x = ${Check.read(x).tex}`).join(",\\ ")) : tex("\\text{none}"))
       : p.kind === "restriction" ? tex(Check.readRestriction(`x${p.answer.op}${p.answer.value}`).tex)
       : p.kind === "number" ? tex(p.ansTex || String(p.answer))
       : tex(p.ansTex || Check.read(p.answer).tex);
   }
-  function answerTeX(raw, kind) {
+  function answerTeX(raw, kind, part) {
     if (!String(raw || "").trim()) return `<span class="muted">(blank)</span>`;
-    const r = kind === "set" ? Check.readSet(raw) : kind === "restriction" ? Check.readRestriction(raw) : Check.read(raw);
+    if (kind === "plot" || kind === "graph") return plotSVG(raw, part);
+    if (window.AnswerCheck && window.AnswerCheck.handles(kind)) { const r = window.AnswerCheck.read(kind, raw); return r.ok ? tex(r.tex) : `<code>${esc(raw)}</code>`; }
+    const r = kind === "set" ? Check.readSet(raw) : kind === "restriction" ? Check.readRestriction(raw) : window.QuadCheck && window.QuadCheck.handles(kind) ? window.QuadCheck.read(kind, raw) : Check.read(raw);
     return r.ok ? tex(r.tex) : `<code>${esc(raw)}</code>`;
+  }
+  // a small graph of a plotted answer (solid) over the key (dashed); either may be missing
+  function plotSVG(raw, part) {
+    if (!window.Graph || !part) return "";
+    const fns = [], styles = [];
+    if (part.kind === "graph") {
+      const g = raw ? window.AnswerCheck.readGraph(raw) : null;
+      const pts = [];
+      if (g && g.ok) { pts.push({ x: g.h, y: g.k, label: "V" }, ...g.pts.map((q) => ({ x: q[0], y: q[1] }))); }
+      // after marking, the correct parabola (dashed) is drawn under the learner's points so differences show
+      return `<span class="plot-mini">${window.Graph.svg({ fns: [part.answer], styles: ["alt"], points: pts, window: part.window && part.window.x0 !== undefined ? part.window : undefined, marks: { vertex: !raw, axis: !raw }, w: 240, h: 200, title: raw ? "Your points over the correct parabola (dashed)" : "The correct parabola" })}</span>`;
+    }
+    const r = raw ? window.QuadCheck.readPlot(raw) : null;
+    if (r && r.ok) { fns.push({ a: window.QuadMath.fstr(r.a), h: window.QuadMath.fstr(r.h), k: window.QuadMath.fstr(r.k) }); styles.push(""); }
+    if (!raw) { fns.push(part.answer); styles.push("alt"); }
+    if (!fns.length) return `<code>${esc(raw)}</code>`;
+    return `<span class="plot-mini">${window.Graph.svg({ fns, styles, window: part.window && part.window.x0 !== undefined ? part.window : undefined, marks: { vertex: true }, w: 240, h: 190, title: raw ? "Your parabola" : "The correct parabola" })}</span>`;
   }
 
   function renderReview() {
@@ -1059,7 +1795,7 @@
     let lastKind = null;
     $("#review-list").innerHTML = rows.map(({ it, i }) => {
       const q = qOf(it);
-      const L = labelOf(i, a.items);
+      const L = labelOf(i, a.items, levelOf(a));
       let sectionHead = "";
       if (reviewFilter !== "slow" && it.kind !== lastKind) {
         const s = a.sections[it.kind];
@@ -1074,7 +1810,7 @@
         <header class="review-item-head">
           <span class="review-num">${L.text}</span>
           <span class="status-pill ${status}">${statusLabel} · ${fmtMarks(it.earned)}/${it.max}</span>
-          ${it.flagged ? '<span class="pill">⚑ Flagged</span>' : ""}
+          ${it.flagged ? '<span class="pill">⚑ Flagged</span>' : ""}${it.hints ? `<span class="pill pill-hint">${esc(tr("test.hintsUsed", { n: it.hints }))}</span>` : ""}
           <span class="topic-tag">${esc(q.topic)}</span>
           <span class="review-time" title="Time spent on this question"><span class="time-bar"><span style="width:${(it.time / maxT) * 100}%"></span></span>${dur(it.time)}</span>
         </header>`;
@@ -1093,7 +1829,7 @@
         bodyHTML = `<div class="q-text">${renderMath(q.q)}</div>
           <div class="answer-compare">
             <div class="${ok ? "is-correct" : blank ? "" : "is-chosen-wrong"}"><span class="cmp-label">Your answer</span>${answerTeX(it.response)}</div>
-            ${ok ? "" : `<div class="is-correct"><span class="cmp-label">Correct answer</span>${tex(String(q.answer))}</div>`}
+            ${ok ? "" : `<div class="is-correct"><span class="cmp-label">Correct answer</span>${tex(q.ansTex || String(q.answer))}</div>`}
           </div>
           <details class="explain"${ok ? "" : " open"}><summary>How to solve it</summary><div>${renderMath(q.e)}</div></details>`;
       } else {
@@ -1101,17 +1837,13 @@
         const parts = q.parts.map((p, k) => {
           const pg = g.parts[k];
           const raw = it.responses[p.key];
-          const yours = p.kind === "choice" ? (raw ? esc(raw) : `<span class="muted">(blank)</span>`) : answerTeX(raw, p.kind);
-          const correct = p.kind === "choice" ? esc(p.answer)
-            : p.kind === "set" ? (p.answer.length ? tex(p.answer.map((x) => `x = ${Check.read(x).tex}`).join(",\\ ")) : tex("\\text{none}"))
-            : p.kind === "restriction" ? tex(Check.readRestriction(`x${p.answer.op}${p.answer.value}`).tex)
-            : p.kind === "number" ? tex(String(p.answer))
-            : tex(p.ansTex || Check.read(p.answer).tex);
+          const yours = p.kind === "choice" ? (raw ? esc(raw) : `<span class="muted">(blank)</span>`) : answerTeX(raw, p.kind, p);
+          const correct = keyTeX(p);
           const cls = pg.verdict === "right" ? "is-correct" : pg.verdict === "partial" ? "is-partial" : pg.verdict === "blank" ? "" : "is-chosen-wrong";
           return `<div class="part-review ${cls}">
             <div class="part-head">${p.label ? `<span class="part-label">${p.label}</span>` : ""}<span class="part-prompt">${renderMath(p.prompt)}</span><span class="marks-badge ${pg.verdict}">${fmtMarks(pg.earned)}/${pg.max}</span></div>
             <div class="part-answers"><span><span class="cmp-label">You</span>${yours}</span>${pg.verdict === "right" ? "" : `<span><span class="cmp-label">Key</span>${correct}</span>`}</div>
-            ${pg.note && pg.verdict !== "right" && pg.verdict !== "blank" ? `<p class="part-note">${esc(pg.note)}</p>` : ""}
+            ${pg.note && pg.verdict !== "right" && pg.verdict !== "blank" ? `<p class="part-note">${esc(window.I18N ? window.I18N.note(pg.note) : pg.note)}</p>` : ""}
           </div>`;
         }).join("");
         bodyHTML = `<div class="q-text">${renderMath(q.intro)}</div>${parts}
@@ -1169,7 +1901,7 @@
   function updateLobby() {
     if (!lobby || document.body.dataset.screen !== "lobby") return;
     const g = lobby.g, now = Date.now();
-    const lvl = LEVELS[g.level].label;
+    const lvl = levelName(g.level);
     const startBtn = $("#btn-lobby-start"), cd = $("#lobby-countdown");
     if (!g.start) {
       $("#lobby-title").textContent = "Ready when you are";
@@ -1225,33 +1957,11 @@
   }
 
   // ───────── Create test (setup dialog) ─────────
-  // ───────── Nightmare tier picker (must be chosen explicitly) ─────────
-  let nmDraft = null;
-  function renderNmCards() {
-    const NM = window.Nightmare;
-    if (!NM) return;
-    $("#s-nm-cards").innerHTML = [1, 2, 3].map((t) => {
-      const T = NM.TIERS[t];
-      let preview = "";
-      try { const q = NM.generate(t, "mc", "exp", ((x) => () => ((x = (x * 16807) % 2147483647) / 2147483647))(97 + t)); const m = /\\\[([\s\S]*)\\\]/.exec(q.q); preview = m ? tex(m[1], true) : ""; } catch { preview = ""; }
-      const on = nmDraft === t;
-      return `<button type="button" role="radio" class="nm-card t${t}${on ? " active" : ""}" data-tier="${t}" aria-checked="${on}">
-        <span class="nm-head"><b>${esc(T.name)}</b><span class="nm-badge">${esc(T.label)}</span><span class="nm-skulls" aria-hidden="true">${"☠".repeat(t)}</span></span>
-        <span class="nm-desc">${esc(T.desc)}</span>
-        <span class="nm-skills">${esc(T.skills)}</span>
-        ${preview ? `<span class="nm-preview" aria-hidden="true"><span class="nm-preview-k">Sample</span>${preview}</span>` : ""}
-      </button>`;
-    }).join("");
-  }
   function openSetup(opts = {}) {
     const p = getPrefs();
     const d = $("#setup-dialog");
     const pick = (sel, attr, val) => { for (const b of $$(`${sel} button`)) { const on = b.dataset[attr] === String(val); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); } };
-    // a saved Nightmare tier is kept (that's the app's normal preference pattern); otherwise none is pre-selected
-    nmDraft = nmTier(p.level);
-    pick("#s-level", "level", nmDraft || opts.nightmare ? "nightmare" : LEVELS[p.level] ? p.level : "normal");
-    renderNmCards();
-    $("#s-nm-error").textContent = "";
+    pick("#s-level", "level", TEST_LEVELS.includes(opts.level) ? opts.level : p.level);
     pick("#s-buddy", "mode", p.buddyMode === "off" ? "normal" : p.buddyMode);
     $("#s-camp").checked = p.buddyMode !== "off";
     $("#s-camp-custom").open = false;
@@ -1320,18 +2030,14 @@
   function syncSetup() {
     const picked = activeVal("#s-level", "level", "normal");
     const isNm = picked === "nightmare";
-    const level = isNm ? (nmDraft ? `nightmare${nmDraft}` : null) : picked;
-    $("#s-nm").hidden = !isNm;
-    for (const b of $$("#s-nm-cards .nm-card")) { const on = Number(b.dataset.tier) === nmDraft; b.classList.toggle("active", on); b.setAttribute("aria-checked", String(on)); }
-    $("#s-group").disabled = isNm;
-    if (isNm && $("#s-group").checked) $("#s-group").checked = false;
+    const level = picked;
     const mode = campMode();
     const group = $("#s-group").checked;
     const startMin = Number(activeVal("#s-start", "start", 0));
     const mins = Number($("#s-time").value);
     $("#s-time-out").textContent = `${mins} min`;
     $("#s-time").style.setProperty("--fill", `${((mins - 10) / 110) * 100}%`);
-    $("#s-level-hint").textContent = level ? LEVELS[level].hint : "Pick Nightmare I, II or III below to continue. Nightmare runs solo (group codes don't carry it yet).";
+    $("#s-level-hint").textContent = LEVELS[level].hint;
     const fireOn = mode !== "off";
     $("#s-hardcore").disabled = !fireOn;
     $("#s-drain").disabled = !fireOn || (group && startMin > 0);
@@ -1343,20 +2049,17 @@
     $("#s-start-hint").textContent = startMin
       ? `Everyone starts together in ${startMin} minutes and finishes at the same moment. Pause is off so the clocks stay in sync.`
       : "Each person's clock starts when they press Start, and Pause still works.";
-    $("#s-go").textContent = group ? "Create group test" : isNm && nmDraft ? `Start ${window.Nightmare.TIERS[nmDraft].name}` : "Start test";
-    $("#s-go").disabled = isNm && !nmDraft;
+    $("#s-go").textContent = group ? "Create group test" : isNm ? tr("mode.start.nightmare") : "Start test";
     $("#setup-title").textContent = group ? "Create a group test" : "Create test";
   }
   async function submitSetup() {
-    const picked = activeVal("#s-level", "level", "normal");
-    if (picked === "nightmare" && !nmDraft) { $("#s-nm-error").textContent = "Choose Nightmare I, II or III first."; $("#setup-dialog").showModal(); return; }
-    const level = picked === "nightmare" ? `nightmare${nmDraft}` : picked;
-    if (!LEVELS[level]) return;
+    const level = activeVal("#s-level", "level", "normal");
+    if (!TEST_LEVELS.includes(level)) return;
     const buddyMode = campMode();
     const minutes = Number($("#s-time").value) || 60;
     const group = $("#s-group").checked;
     const name = $("#s-name").value.trim().slice(0, 18);
-    setPrefs({ level, ...(nmTier(level) ? { lastNightmare: level } : {}), buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
+    setPrefs({ level, mode: level, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
     if (group) {
       const startMin = Number(activeVal("#s-start", "start", 0));
       const seed = (crypto.getRandomValues(new Uint32Array(1))[0] & 0x7ffff) || 1;
@@ -1374,6 +2077,7 @@
     if (room && window.Rooms) { $("#join-error").textContent = ""; $("#join-code").value = ""; return window.Rooms.join(room); }
     const g = window.Group.decodeGroup(code);
     if (!g) { $("#join-error").textContent = "That code isn't valid — check it for typos."; return; }
+    if (!TEST_LEVELS.includes(g.level)) { $("#join-error").textContent = "That code is for Tim's Test, which was retired when the class moved on to quadratics. Ask for a new code."; return; }
     $("#join-error").textContent = "";
     $("#join-code").value = "";
     openLobby(g);
@@ -1397,7 +2101,7 @@
     const maxes = a.items.map((it) => it.max);
     const rows = [mine, ...friends].map((r) => ({ ...r, total: r.earned.reduce((x, y) => x + y, 0) }))
       .sort((x, y) => y.total - x.total || x.time - y.time);
-    const labels = a.items.map((_, i) => labelOf(i, a.items).text);
+    const labels = a.items.map((_, i) => labelOf(i, a.items, levelOf(a)).text);
     const missed = labels.filter((_, i) => rows.every((r) => (r.earned[i] || 0) < maxes[i]));
     const cell = (e, m) => e >= m ? `<td class="gc full" title="${e}/${m}">✓</td>` : e > 0 ? `<td class="gc part" title="${e}/${m}">${e}</td>` : `<td class="gc none" title="0/${m}">✗</td>`;
 
@@ -1417,7 +2121,7 @@
             <thead><tr><th>#</th><th>Name</th><th>Mark</th><th>Time</th><th class="sr-only">Remove</th></tr></thead>
             <tbody>${rows.map((r, k) => `
               <tr class="${r.me ? "me" : ""}"><td>${k + 1}</td><td>${esc(r.name)}${r.me ? ' <span class="muted small">(you)</span>' : ""}</td>
-                <td><b>${Math.round((r.total / TOTAL_MARKS) * 1000) / 10}%</b> <span class="muted">${fmtMarks(r.total)}/${TOTAL_MARKS}</span></td>
+                <td><b>${Math.round((r.total / a.total) * 1000) / 10}%</b> <span class="muted">${fmtMarks(r.total)}/${a.total}</span></td>
                 <td>${clock(r.time)}</td>
                 <td>${r.me ? "" : `<button class="btn btn-link gb-remove" data-code="${esc(r.code)}" type="button" aria-label="Remove ${esc(r.name)}">Remove</button>`}</td></tr>`).join("")}
             </tbody>
@@ -1456,55 +2160,69 @@
     for (const b of $$(".gb-remove", el)) b.onclick = () => { a.group.friends = a.group.friends.filter((c) => c !== b.dataset.code); saveAttempt(a); renderGroupBoard(a); };
   }
 
-  // ───────────────────────── guided tour (sample test, nothing saved) ─────────────────────────
-  function startTour() {
-    const now = Date.now();
-    session = {
-      id: "demo", demo: true, startedAt: now, elapsed: 0, lastActive: now, paused: false, pauses: 0,
-      items: [
-        { kind: "wr", qid: "wr2-1", responses: {}, work: "", time: 0, flagged: false },
-        { kind: "nr", qid: "nr-1", response: "", time: 0, flagged: false },
-        mcItem(BANKS.mc.get("sets-1")),
-      ],
-      current: 0, mode: getPrefs().buddyMode === "off" ? "normal" : getPrefs().buddyMode, buddy: null,
-    };
-    enterTest();
-    const goTo = (k) => { if (session && session.current !== k) { session.current = k; renderQuestion(); } };
-    const steps = [
-      { title: "Welcome to Campfire Prep", html: `<p>This tour uses a <b>sample test</b>, so nothing here is saved or marked.</p><p>A real practice test is <b>34 marks in 60 minutes</b>, laid out like your unit test: Written Response (19), Numerical Response (5) and Multiple Choice (10).</p>` },
-      { target: "#topbar-test", title: "Your progress stays on top", html: `<p>This bar sticks to the top while you scroll. It shows where you are, how much you've answered (one segment per section) and the time left.</p>` },
-      { target: "#btn-pause", title: "Pause for dinner", html: `<p><b>Pause</b> (or <kbd>P</kbd>) freezes the clock and locks the test so nothing can be read or answered.</p><p>You can even close the tab. Come back later and resume from Basecamp with the same time left.</p>` },
-      { target: "#question-card", title: "Answering questions", onEnter: () => goTo(2), html: `<p><b>Multiple choice:</b> click an answer or press <kbd>1</kbd>–<kbd>4</kbd>.</p><p><b>Numerical response:</b> type a single number.</p><p>Use <b>Flag</b> to mark anything you want to come back to.</p>` },
-      {
-        target: "#q-body .wr-part:nth-child(2)", title: "Typing math", interactive: true,
-        onEnter: () => {
-          goTo(0);
-          const inp = $('#q-body input[data-part="b"]');
-          if (inp && !inp.value) { inp.value = "(12+4√5)/4"; inp.dispatchEvent(new Event("input", { bubbles: true })); }
-        },
-        html: `<p>Written answers are typed: use the <b>√ ∛</b> buttons or type <code>sqrt</code>. <b>Reads as</b> shows how your answer was understood.</p><p>They're marked like your teacher would. This answer has the right value, but the fraction can still be reduced to \\(3 + \\sqrt{5}\\), so it would lose a mark.</p>`,
-      },
-      { target: ".navigator", title: "Jump around", html: `<p>Every question is here, grouped by section. Filled squares are answered, half-filled are partly answered, and a dot means flagged.</p><p>Press <b>Submit test</b> when you're done.</p>` },
-      { target: ".buddy-panel", title: "Meet your puppy", html: `<p>Your puppy sits by the fire while you work. It wags when it's cozy, shivers and puffs breath when it's cold, pants when it's too hot, and hops when you add a log.</p>` },
-      { target: ".heat-panel", title: "Keep the fire in the green", interactive: true, html: `<p>The fire cools over time. Press <b>Add log</b> (or <kbd>F</kbd>). Logs take a few seconds to catch, so don't spam it.</p><p>Above the top line the camp catches fire; below the bottom line your puppy freezes. <b>Try adding a log now.</b></p><p class="muted small">It never affects your mark. In <b>Create test</b> you can pick No campfire, let the puppy lose, or try Armadillo mode (the clock drains faster when the fire is neglected). <b>Turn off campfire</b> under this button stops the minigame mid-test.</p>` },
-      {
-        target: "#scratchpad", title: "Your scratchpad", interactive: true,
-        onEnter: () => { if (pad) pad.open(); },
-        html: `<p><b>Hold the left mouse button to write.</b> Try it now!</p><p>Drag the dark title bar to move it, pull the bottom-right corner to resize, use ⤢ to make it big, and – (or <kbd>N</kbd>) to tuck it away.</p><p>Each question gets its own page, and your scratch work shows up in the review.</p>`,
-      },
-      { title: "You're ready", html: `<p><b>Basecamp</b> is home between tests. Press <b>Create test</b> to pick the level (Tim's Test, Normal or Challenge), the time limit and campfire options, or make a <b>group test</b> to share with friends.</p><p>Basecamp also shows past results and which topics to practise next.</p><p class="muted small">You can replay this tour any time from <b>How to play</b>.</p>` },
-    ];
-    for (const st of steps) st.html = renderMath(st.html);
-    window.Tour.start(steps, {
-      finishLabel: "Go to Basecamp",
-      onEnd: () => {
-        store.set(KEYS.toured, true);
-        if (pad) pad.setPage([], "");
-        teardownTest();
-        goHome();
-      },
-    });
-  }
+  // ───────── practice copy of a test for the test-taking tutorial (session.demo: never saved, marked or recorded) ─────────
+  // No campfire: the minigame has its own tutorial and is never part of this one.
+  let demoState = null;
+  const demo = {
+    start() {
+      if (session && !session.demo) return null;
+      const now = Date.now();
+      const QB = window.QuadBank, rnd = window.Group.rng(20261016);
+      const reg = (q, kind) => { BANKS[kind].set(q.id, q); return q; };
+      const wr = reg(QB.generate("vform", "wr", "normal", rnd), "wr"), plot = reg(QB.generate("sketch", "wr", "normal", rnd), "wr");
+      const nr = reg(QB.generate("yint", "nr", "normal", rnd), "nr"), mcq = reg(QB.generate("matchgraph", "mc", "simple", rnd), "mc");
+      session = {
+        id: "demo", demo: true, startedAt: now, elapsed: 0, lastActive: now, paused: false, pauses: 0, level: "normal", subject: "quadratics",
+        items: [wrItem(wr), wrItem(plot), nrItem(nr), mcItem(mcq, rnd)], current: 0, mode: "off", buddy: null,
+      };
+      demoState = { qs: [wr, plot, nr, mcq] };
+      enterTest();
+      return demoState;
+    },
+    goTo(k) { if (session && session.demo && session.current !== k) { session.current = k; renderQuestion(); } },
+    firstPart(k) { const q = demoState && demoState.qs[k]; return q && q.parts ? q.parts[0].key : null; },
+    // grade one part with the real marking engine; nothing is stored
+    check(k, partKey) {
+      if (!session || !session.demo) return null;
+      const item = session.items[k], q = qOf(item); if (!q || !q.parts) return null;
+      const part = q.parts.find((p) => p.key === partKey) || q.parts[0];
+      const resp = (item.responses || {})[part.key] || "";
+      if (!String(resp).trim()) return { blank: true, max: part.marks };
+      const g = Check.grade(part, resp);
+      return { earned: g.earned, max: g.max, note: g.note || "", blank: g.verdict === "blank" };
+    },
+    fill(k, partKey) {
+      if (!session || !session.demo) return;
+      const item = session.items[k], q = qOf(item); const part = q.parts.find((p) => p.key === partKey) || q.parts[0];
+      const v = window.QuadCheck && window.QuadCheck.handles(part.kind) ? window.QuadCheck.keyResponse(part) : String(part.answer);
+      item.responses[part.key] = v;
+      session.current = k; renderQuestion();
+      const inp = $(`#q-body input[data-part="${part.key}"]`); if (inp) { inp.value = v; inp.dispatchEvent(new Event("input", { bubbles: true })); }
+    },
+    end() {
+      if (!session || !session.demo) return;
+      if (pad) pad.setPage([], "");
+      teardownTest();
+      demoState = null;
+    },
+  };
+
+  // ───────── campfire hooks for the minigame tutorial: hold the clock and the fire while it runs ─────────
+  let tutorialHold = false;
+  const game = {
+    active: () => !!(session && !session.demo && fire && session.mode !== "off" && document.body.dataset.screen === "test" && !session.paused && !session.gameOver),
+    cfg: () => ({ mech: (session && session.companion && session.companion.mech) || {}, events: !!(session && session.companion && session.companion.events && (session.companion.active || session.companion.picked || []).length), hardcore: !!(session && session.hardcore), drain: !!(session && session.drain) }),
+    logs: () => (fire ? fire.stats.logs : 0),
+    hold(on) {
+      tutorialHold = !!on;
+      if (!session) return;
+      tick();
+      lastTick = Date.now();
+      if (on) { if (fire) fire.stop(); }
+      else if (fire && !session.paused && !session.gameOver && session.mode !== "off") fire.start();
+    },
+  };
+  function maybeGameTutorial() { if (window.Onboarding && game.active()) window.Onboarding.onGameOpen(); }
 
   // ───────────────────────── dialog ─────────────────────────
   function confirmDialog(title, bodyHtml, okLabel, cancelLabel) {
@@ -1536,21 +2254,21 @@
   function explainMistake(i) {
     const a = viewing, it = a.items[i], q = qOf(it);
     if (!q) return;
-    const L = labelOf(i, a.items);
+    const L = labelOf(i, a.items, levelOf(a));
     tutorFocus = { attemptId: a.id, label: L.text, ...questionForTutor(it, q) };
     window.Tutor.open({ mode: "explain", prompt: it.earned < it.max ? `Why did I lose marks on ${L.text}?` : `Can you explain ${L.text}?`, send: true });
   }
   const plain = (html) => { const d = document.createElement("div"); d.innerHTML = String(html).replace(/\\\(|\\\)/g, " "); return (d.textContent || "").replace(/\s+/g, " ").trim(); };
-  const texPlain = (s) => String(s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); // keeps \( LaTeX \) for the model
+  const texPlain = (s) => String(window.Graph ? window.Graph.describe(s) : s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); // keeps \( LaTeX \) for the model
   function questionForTutor(it, q) {
     if (it.kind === "mc") {
       return { kind: "Multiple choice", question: texPlain(q.q), choices: it.order.map((o, k) => `${LETTERS[k]}. ${texPlain(q.c[o])}`), studentAnswer: it.chosen === null ? "(blank)" : `${LETTERS[it.order.indexOf(it.chosen)]}. ${texPlain(q.c[it.chosen])}`, verifiedAnswer: `${LETTERS[it.order.indexOf(0)]}. ${texPlain(q.c[0])}`, verifiedExplanation: texPlain(q.e), marks: `${it.earned}/${it.max}` };
     }
-    if (it.kind === "nr") return { kind: "Numerical response", question: texPlain(q.q), studentAnswer: it.response || "(blank)", verifiedAnswer: String(q.answer), verifiedExplanation: texPlain(q.e), marks: `${it.earned}/${it.max}` };
+    if (it.kind === "nr") return { kind: "Numerical response", question: texPlain(q.q), studentAnswer: it.response || "(blank)", verifiedAnswer: q.ansText || String(q.answer), verifiedExplanation: texPlain(q.e), marks: `${it.earned}/${it.max}` };
     const g = gradeItem(it);
     return {
       kind: "Written response", question: texPlain(q.intro), marks: `${it.earned}/${it.max}`,
-      parts: q.parts.map((p, k) => ({ part: p.label || p.key, prompt: texPlain(p.prompt), studentAnswer: it.responses[p.key] || "(blank)", verifiedAnswer: p.kind === "set" ? (p.answer.join(", ") || "none") : p.kind === "restriction" ? `x ${p.answer.op} ${p.answer.value}` : String(p.ansTex ? p.ansTex : p.answer), marks: `${g.parts[k].earned}/${g.parts[k].max}`, markerNote: g.parts[k].note || "" })),
+      parts: q.parts.map((p, k) => ({ part: p.label || p.key, prompt: texPlain(p.prompt), studentAnswer: it.responses[p.key] || "(blank)", verifiedAnswer: p.kind === "set" ? (p.answer.join(", ") || "none") : p.kind === "restriction" ? `x ${p.answer.op} ${p.answer.value}` : window.QuadCheck && window.QuadCheck.handles(p.kind) ? window.QuadCheck.keyTeX(p) : String(p.ansTex ? p.ansTex : p.answer), marks: `${g.parts[k].earned}/${g.parts[k].max}`, markerNote: g.parts[k].note || "" })),
       verifiedSolution: q.solution.map(texPlain).join(" "), markingKey: q.rubric.map(texPlain),
     };
   }
@@ -1563,16 +2281,16 @@
     if (scr === "home") {
       const L = learningState();
       return {
-        type: "basecamp", title: "Basecamp (home dashboard)",
-        text: [plain($("#home-sub").innerHTML), "Recommendations shown: " + L.recs.filter((r) => r.status !== "not_attempted").slice(0, 3).map((r) => `${r.title} [${r.label}]: ${r.why}`).join(" | "), "Marking habits panel: " + plain($("#habits").innerHTML), "Stat tiles: " + plain($("#home-stats").innerHTML)].join("\n"),
+        type: "basecamp", title: "Home dashboard",
+        text: [plain($("#home-sub").innerHTML), "Recommendations: " + L.recs.filter((r) => r.status !== "not_attempted").slice(0, 3).map((r) => `${r.title} [${r.label}]: ${r.why}`).join(" | "), "Stats panel: " + plain($("#stats-panel").innerHTML), "Goals: " + plain($("#goals").innerHTML), "Selected mode preview: " + plain($("#mode-preview").innerHTML)].join("\n"),
         concepts: L.recs.slice(0, 3).map((r) => r.concept),
       };
     }
     if (scr === "results" && viewing) {
       const a = viewing;
-      const lost = a.items.map((it, i) => ({ it, i })).filter((x) => x.it.earned < x.it.max).map(({ it, i }) => `${labelOf(i, a.items).text} (${(qOf(it) || {}).topic}): ${it.earned}/${it.max}`);
-      const ctx = { type: "results", title: `Test results and review (${LEVELS[levelOf(a)].label}, ${a.percent}%)`, text: `Mark ${a.earned}/${a.total}. Sections: ${SECTIONS.map((s) => `${s.name} ${a.sections[s.key].earned}/${a.sections[s.key].max}`).join(", ")}. Questions with lost marks: ${lost.join("; ") || "none"}.`, concepts: [] };
-      if (tutorFocus && tutorFocus.attemptId === a.id) { ctx.focus = tutorFocus; ctx.concepts = window.Concepts.conceptsFor(qOf(a.items.find((x, k) => labelOf(k, a.items).text === tutorFocus.label))); }
+      const lost = a.items.map((it, i) => ({ it, i })).filter((x) => x.it.earned < x.it.max).map(({ it, i }) => `${labelOf(i, a.items, levelOf(a)).text} (${(qOf(it) || {}).topic}): ${it.earned}/${it.max}`);
+      const ctx = { type: "results", title: `Test results and review (${levelName(levelOf(a))}, ${a.percent}%)`, text: `Mark ${a.earned}/${a.total}. Sections: ${sectionsOf(a.items).map((s) => `${s.name} ${a.sections[s.key].earned}/${a.sections[s.key].max}`).join(", ")}. Questions with lost marks: ${lost.join("; ") || "none"}.`, concepts: [] };
+      if (tutorFocus && tutorFocus.attemptId === a.id) { ctx.focus = tutorFocus; ctx.concepts = window.Concepts.conceptsFor(qOf(a.items.find((x, k) => labelOf(k, a.items, levelOf(a)).text === tutorFocus.label))); }
       return ctx;
     }
     // Fallback: readable text of the visible screen only
@@ -1585,7 +2303,10 @@
     Check, confirmDialog, partHTML, answerTeX, keyTeX, insertAtCursor, updatePreview, LETTERS, isAssessmentActive, assessmentState, discardSaved, resumeSaved: () => resumeTest(), learningState, pageContext, go: navigate, plain, texPlain,
     BANKS, MC: () => [...MCB, ...CM.mc], NR: () => [...NRB, ...CM.nr], CHMC: () => CHM, CHNR: () => CHN,
     setTutorFocus: (f) => { tutorFocus = f; },
-    openSheet, closeSheet, copyText, getPrefs,
+    openSheet, closeSheet, copyText, getPrefs, hydratePlots, tr,
+    pad: () => ensurePad(), inTest: () => !!session && document.body.dataset.screen === "test",
+    setIsland, setSettings, selectMode, demo, game, inLiveTest: () => !!(session && !session.demo),
+    ensurePadPage: () => { if (!(session && document.body.dataset.screen === "test")) usePadGeneral(); },
   };
 
   // A modal sheet for detail views (evidence inspector). Closes on Esc, the × button or a backdrop click.
@@ -1601,27 +2322,17 @@
   function init() {
     if (!MCB || !NRB || !WRB || !Check) { document.body.innerHTML = "<p style='padding:2rem'>The question bank failed to load.</p>"; return; }
 
-    $("#btn-enter").addEventListener("click", () => (store.get(KEYS.toured, false) ? goHome() : startTour()));
-    for (const b of $$("#level-pick button")) b.addEventListener("click", () => {
-      if (b.dataset.level === "nightmare") {
-        // Nightmare needs an explicit tier: reuse the last one chosen, otherwise ask in Create test
-        const last = getPrefs().lastNightmare;
-        if (nmTier(last)) { setPrefs({ level: last }); renderHome(); } else openSetup({ nightmare: true });
-        return;
-      }
-      setPrefs({ level: b.dataset.level }); renderHome();
-    });
+    $("#btn-enter").addEventListener("click", () => { goHome(); if (window.Onboarding) window.Onboarding.onEnter(); });
+    for (const b of $$("#level-pick button")) b.addEventListener("click", () => { setPrefs({ level: b.dataset.level }); renderProgressScreen(); });
     $("#btn-group-create").addEventListener("click", () => openSetup({ group: true }));
     $("#join-form").addEventListener("submit", (e) => { e.preventDefault(); joinGroup($("#join-code").value); });
     $("#btn-lobby-start").addEventListener("click", startFromLobby);
     $("#btn-lobby-leave").addEventListener("click", leaveLobby);
     $("#btn-copy-code").addEventListener("click", () => copyText($("#lobby-code").textContent, null, $("#copy-note")));
     $("#btn-copy-link").addEventListener("click", () => copyText($("#lobby-link").value, $("#lobby-link"), $("#copy-note")));
-    $("#s-nm-cards").addEventListener("click", (e) => { const c = e.target.closest("[data-tier]"); if (!c) return; nmDraft = Number(c.dataset.tier); $("#s-nm-error").textContent = ""; syncSetup(); });
     for (const grp of ["#s-level", "#s-buddy", "#s-start"]) {
       $(grp).addEventListener("click", (e) => {
         const b = e.target.closest("button"); if (!b) return;
-        if (grp === "#s-level" && b.dataset.level !== "nightmare") nmDraft = null; // leaving Nightmare clears the tier
         for (const x of $$(`${grp} button`)) { x.classList.toggle("active", x === b); x.setAttribute("aria-checked", x === b); }
         syncSetup();
       });
@@ -1632,7 +2343,80 @@
     $("#s-camp-reset").addEventListener("click", () => { compDraft = window.Companion.full(); renderCompSetup(); });
     $("#s-comp").addEventListener("click", (e) => { if (e.target.closest("[data-cs]")) onCompSetup(e); });
     $("#setup-dialog").addEventListener("close", () => { if ($("#setup-dialog").returnValue === "ok") submitSetup(); });
-    $("#btn-create").addEventListener("click", () => openSetup());
+    // home: difficulty carousel and preview (the preview's buttons are re-rendered, so delegate)
+    $("#mode-track").addEventListener("click", (e) => { const c = e.target.closest("[data-mode]"); if (c) selectMode(c.dataset.mode, true); });
+    $("#mode-track").addEventListener("keydown", (e) => {
+      const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      selectMode(MODES[(MODES.indexOf(selectedMode()) + d + MODES.length) % MODES.length], true);
+    });
+    $("#mode-prev").addEventListener("click", () => selectMode(MODES[(MODES.indexOf(selectedMode()) + MODES.length - 1) % MODES.length]));
+    $("#mode-next").addEventListener("click", () => selectMode(MODES[(MODES.indexOf(selectedMode()) + 1) % MODES.length]));
+    document.addEventListener("click", (e) => {
+      const st = e.target.closest("[data-start-mode]"); if (st) { e.preventDefault(); return startMode(st.dataset.startMode); }
+      const su = e.target.closest("[data-setup-mode]"); if (su) { e.preventDefault(); return openSetup({ level: su.dataset.setupMode }); }
+      const dr = e.target.closest("[data-drill]"); if (dr) { e.preventDefault(); return startDrill(dr.dataset.drill, dr.dataset.level); }
+      const cm = e.target.closest("[data-course-mode]"); if (cm) { setPrefs({ courseMode: cm.dataset.courseMode }); return renderCourse(); }
+      const cs = e.target.closest("[data-course-sub]"); if (cs) { e.preventDefault(); return startCourse({ sub: cs.dataset.courseSub }); }
+      const cx = e.target.closest("[data-course-mix]"); if (cx) { e.preventDefault(); return startCourse({ unit: cx.dataset.courseMix }); }
+      const ca = e.target.closest("[data-course-all]"); if (ca) { e.preventDefault(); return startCourse({ all: true }); }
+      // Studio+ workspace
+      const spm = e.target.closest("[data-sp-mode]"); if (spm) { setPrefs({ mode: spm.dataset.spMode }); previewSeed = 1; renderHome(); const b = $(`[data-sp-mode="${spm.dataset.spMode}"]`); if (b) b.focus(); return; }
+      const spd = e.target.closest("[data-sp-drill]"); if (spd) { e.preventDefault(); return startDrill(spd.dataset.spDrill, selectedMode(), goHome); }
+      const spu = e.target.closest("[data-sp-unit]"); if (spu) { setPrefs({ courseOpen: spu.dataset.spUnit, courseMode: SP_PRACTICE_MODES.includes(selectedMode()) ? selectedMode() : courseMode() }); return navigate("course"); }
+      if (e.target.closest("#sp-go-topic")) return spStartTopic();
+      const spt = e.target.closest("[data-sp-tool]"); if (spt) {
+        const t = spt.dataset.spTool;
+        if ((t === "calc" || t === "pad") && window.Tools) return window.Tools.open(t, spt);
+        setSettings(true);
+        if (t === "lang") { const l = $("#set-lang .active") || $("#set-lang button"); if (l) l.focus(); }
+        return;
+      }
+      const at = e.target.closest("[data-attempt]"); if (at) { e.preventDefault(); const a = getHistory().find((x) => x.id === at.dataset.attempt); if (a) showResults(a, false); return; }
+      if (e.target.id === "btn-new-example") { previewSeed++; return renderPreview(); }
+    });
+    document.addEventListener("toggle", (e) => { const d = e.target; if (d.classList && d.classList.contains("course-unit") && d.open) setPrefs({ courseOpen: d.dataset.unit }); }, true);
+    $("#mode-preview").addEventListener("change", (e) => { if (e.target.id === "simple-skill") setPrefs({ simpleSkill: e.target.value }); });
+    $("#splus").addEventListener("change", (e) => { if (e.target.id === "sp-unit") { setPrefs({ spUnit: e.target.value }); renderHome(); const u = $("#sp-unit"); if (u) u.focus(); } });
+
+    // island navigation + puppy settings
+    $("#brand-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      if (session && !session.demo) return leaveTest();
+      if (session && session.demo) return;
+      setIsland(!$("#island").classList.contains("open"));
+      if ($("#island").classList.contains("open")) { const a = $("#main-nav button.active") || $("#main-nav button"); if (a) a.focus(); }
+    });
+    $("#main-nav").addEventListener("keydown", onIslandKey);
+    $("#main-nav").addEventListener("click", () => setIsland(false));
+    $("#btn-settings").addEventListener("click", (e) => { e.stopPropagation(); setSettings($("#settings-pop").hidden); });
+    $("#settings-pop").addEventListener("click", (e) => {
+      if (e.target.closest("[data-close-pop]")) return setSettings(false);
+      // scoped selectors: <html> itself carries data-layout / data-theme
+      const l = e.target.closest("#set-lang [data-lang]"); if (l) { applyUI({ lang: l.dataset.lang }); return; }
+      const lo = e.target.closest("#set-layout [data-layout]"); if (lo) { applyUI({ layout: lo.dataset.layout }); if (document.body.dataset.screen === "home") renderHome(); if (session && pad && pad._place) pad._place(); return; }
+      const th = e.target.closest("#set-theme [data-theme-opt]"); if (th) { applyUI({ theme: th.dataset.themeOpt }); }
+      if (e.target.closest("#goose-toggle")) { if (selectedMode() === "simple" && !getPrefs().goose) return; setPrefs({ goose: !getPrefs().goose }); renderSettings(); const b = $("#goose-toggle"); if (b) b.focus(); return; }
+    });
+    $("#settings-pop").addEventListener("change", (e) => { if (e.target.id === "goose-calm") setPrefs({ gooseCalm: e.target.checked }); });
+    $("#settings-pop").addEventListener("keydown", onRadioKeys);
+    document.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("#tour-card")) return; // using the tour card never closes what the tour is showing
+      if (!$("#settings-pop").hidden && !e.target.closest("#settings-pop, #btn-settings")) setSettings(false);
+      if ($("#island").classList.contains("open") && !e.target.closest("#island")) setIsland(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (!$("#settings-pop").hidden) { e.preventDefault(); setSettings(false); }
+      else if ($("#island").classList.contains("open")) { e.preventDefault(); setIsland(false); $("#brand-link").focus(); }
+      else if (document.body.classList.contains("navpop-open")) { e.preventDefault(); setNavPop(false); $("#btn-navpop").focus(); }
+    });
+    document.addEventListener("i18n:change", () => { renderSettings(); rerenderScreen(); if (window.Tools) window.Tools.sync(); });
+    // Focus layout: the question navigator opens on request
+    $("#btn-navpop").addEventListener("click", () => setNavPop(!document.body.classList.contains("navpop-open")));
+    $("#nav-grid").addEventListener("click", () => { if (document.body.classList.contains("navpop-open")) setNavPop(false); });
+    $("#btn-hint").addEventListener("click", useHint);
     $("#lobby-buddy").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
       setPrefs({ buddyMode: b.dataset.mode });
@@ -1644,23 +2428,7 @@
     $("#btn-fire-off").addEventListener("click", async () => {
       if (await confirmDialog("Turn off the campfire?", "The puppy and fire go away for the rest of this test so you can focus on the math. Armadillo mode stops too. This can't be undone for this test.", "Turn it off", "Keep it")) turnOffCampfire();
     });
-    $("#btn-tour").addEventListener("click", startTour);
-    $("#btn-tour-2").addEventListener("click", startTour);
-    $("#brand-link").addEventListener("click", (e) => {
-      e.preventDefault();
-      if (session && !session.demo) return leaveTest();
-      if (window.Tour.active) return;
-      if (lobby) return leaveLobby();
-      goHome();
-    });
-
-    $("#btn-start").addEventListener("click", async () => {
-      if (savedSession()) {
-        if (!(await confirmDialog("Start over?", "You have an unfinished test. Starting a new one will discard it.", "Start new test", "Cancel"))) return;
-      }
-      store.del(KEYS.session);
-      startTest();
-    });
+    // "How it works" (title screen and Home) replays the site tour: handled by [data-onboard] in js/onboarding.js
 
 
     const body = $("#q-body");
@@ -1706,7 +2474,9 @@
     });
 
     document.addEventListener("keydown", (e) => {
-      if (!session || document.body.dataset.screen !== "test" || $("#dialog").open || session.paused || session.gameOver) return;
+      if (!session || document.body.dataset.screen !== "test" || $("#dialog").open || session.paused || session.gameOver || e.defaultPrevented) return;
+      // the goose has the game frozen: answer shortcuts wait (Pause and Exit stay on the top bar)
+      if (window.Goose && window.Goose.frozen() && e.key.toLowerCase() !== "p") { if (!e.target.closest || !e.target.closest(".island-wrap, #gz-hud")) e.preventDefault(); return; }
       const typing = e.target.matches("input, textarea");
       if ((e.metaKey || e.ctrlKey) && !typing && e.key.toLowerCase() === "z" && pad) { e.preventDefault(); return pad.undo(); }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1724,7 +2494,8 @@
       else if (e.key === "ArrowLeft") { e.preventDefault(); go(session.current - 1); }
       else if (k === "f" && fire) { e.preventDefault(); fire.addFuel(); }
       else if (fire && fire.comp && fire.comp.key(k)) { e.preventDefault(); }
-      else if (k === "n" && pad) { e.preventDefault(); pad.toggleMin(); }
+      else if (k === "n" && pad) { e.preventDefault(); pad.toggleMin(); if (window.Tools) window.Tools.sync(); }
+      else if (k === "h") { e.preventDefault(); useHint(); }
       else if (k === "p") { e.preventDefault(); pauseTest(); }
     });
 
@@ -1744,6 +2515,7 @@
     document.addEventListener("visibilitychange", () => { if (document.hidden) saveSession(); });
     // Invite links look like  …/#g-XXXXXXXXXXXX
     const fromHash = () => {
+      if (location.hash === "#c-formulas" && !session) { navigate("library", "formulas"); return true; }
       const cm = location.hash.match(/^#c-([a-z]+\.[a-z_]+)$/);
       if (cm && window.Concepts.get(cm[1]) && !session) { navigate("library", cm[1]); return true; }
       const m = location.hash.match(/^#g-([0-9A-Za-z]{12})$/);
@@ -1763,6 +2535,29 @@
     $("#sheet").addEventListener("click", (e) => { if (e.target === $("#sheet")) closeSheet(); });
     window.Analyst.init(API);
     window.Tutor.init(API);
+    if (window.Tools) window.Tools.init(API);
+    if (window.Onboarding) window.Onboarding.init(API);
+    if (window.Goose) window.Goose.init({
+      t: tr,
+      // the goose only plays where there's a game to disrupt, never over tours, dialogs, settings or a paused test
+      applicable: () => {
+        const scr = document.body.dataset.screen;
+        if (!["home", "test", "practice", "course"].includes(scr)) return false;
+        if ((window.Tour && window.Tour.active) || $("#dialog").open || !$("#settings-pop").hidden || !$("#gameover").hidden) return false;
+        if (scr === "test" && (!session || session.demo || session.paused || session.gameOver)) return false;
+        return true;
+      },
+      stageEl: () => $(`#screen-${document.body.dataset.screen}`),
+      // what a stolen panel must not land on
+      essentials: () => ["#question-card", ".q-nav", "#btn-start", "#mode-track", "#prac-run .quiz-fb-actions", "#prac-run [data-pr]", "#splus .sp-launch .btn-primary", "#tools-btn"].flatMap((sel) => [...document.querySelectorAll(sel)]).filter((el) => el.offsetParent).map((el) => el.getBoundingClientRect()),
+      calm: () => { const p = getPrefs(); return p.gooseCalm === undefined ? matchMedia("(prefers-reduced-motion: reduce)").matches : !!p.gooseCalm; },
+      turnOff: () => setPrefs({ goose: false }),
+    });
+    applyGoose();
+    applyUI();
+    if (window.I18N) window.I18N.apply(document);
+    // follow the OS theme live when "System" is chosen (CSS handles it; this keeps the colour-scheme hint honest)
+    try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (getUI().theme === "system") applyUI(); }); } catch { /* old browsers */ }
     if (!fromHash()) renderTitle();
     setInterval(() => window.Tutor.refresh(), 1000); // belt-and-braces: hide the tutor the moment a test exists
   }

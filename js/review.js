@@ -195,6 +195,11 @@
     return k ? window.Practice.itemFor(k, m.qid, m.part, { tag: "From your notebook", mistakeKey: m.key }) : null;
   }
   function freshFor(conceptId, avoid) {
+    // every concept reviews with a fresh, verified question from the engine (Normal level, never a recent repeat)
+    if (window.Bank) {
+      const got = window.Bank.select({ concept: conceptId, mode: "normal", n: 1 }).items[0];
+      if (got && !avoid.has(got.q.id)) { A.BANKS[got.kind].set(got.q.id, got.q); return window.Practice.makeItem(got.kind, got.q, got.part || undefined, { tag: `Review · ${C().get(conceptId).title}` }); }
+    }
     const recent = new Set(A.store.get(A.KEYS.practice, []).filter((p) => Date.now() - p.date < 2 * L_().DAY).map((p) => p.qid));
     const pool = [...A.MC().map((q) => ["mc", q]), ...A.NR().map((q) => ["nr", q])].filter(([, q]) => C().conceptsFor(q).includes(conceptId) && !avoid.has(q.id));
     const fresh = pool.filter(([, q]) => !recent.has(q.id));

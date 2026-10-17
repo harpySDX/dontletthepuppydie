@@ -3,14 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Campfire Prep — Pre-Calc 11</title>
-  <meta name="description" content="A 34-mark, 60-minute Pre-Calculus 11 practice test on radicals, rationalizing, radical equations and exponents — with a puppy and a campfire to keep alive." />
+  <title>DontLetThePuppyDie — Pre-Calc 11</title>
+  <meta name="description" content="Practise Pre-Calculus 11 quadratic functions and graphing: guided practice, unit-test style tests and a Nightmare gauntlet, with real graphs, a calculator and a scratchpad. With a puppy and a campfire to keep alive." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/katex/katex.min.css" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/glass.css" />
+  <script>
+    // apply saved theme/layout before first paint (no flash)
+    (function () { try { var u = JSON.parse(localStorage.getItem("campfire-prep.ui.v1") || "{}"); var d = document.documentElement; d.dataset.theme = u.theme || "light"; d.dataset.layout = u.layout || "balanced"; } catch (e) { document.documentElement.dataset.theme = "light"; } })();
+  </script>
   <!-- Self-check styles: inline so they work even if css/style.css is missing -->
   <style>
     .deploy-check { position: fixed; inset: auto 12px 12px 12px; z-index: 9999; max-width: 720px; margin: 0 auto; padding: 16px 18px; border-radius: 12px;
@@ -37,6 +42,39 @@
         <stop offset="0" stop-color="#e8f8ff" stop-opacity="0.85" />
         <stop offset="1" stop-color="#7cc8f2" stop-opacity="0.55" />
       </linearGradient>
+      <symbol id="paw" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="15.6" rx="5.2" ry="4.4" fill="currentColor" />
+        <ellipse cx="5.6" cy="10.4" rx="2.1" ry="2.6" transform="rotate(-18 5.6 10.4)" fill="currentColor" />
+        <ellipse cx="9.4" cy="6.4" rx="2.1" ry="2.7" transform="rotate(-6 9.4 6.4)" fill="currentColor" />
+        <ellipse cx="14.6" cy="6.4" rx="2.1" ry="2.7" transform="rotate(6 14.6 6.4)" fill="currentColor" />
+        <ellipse cx="18.4" cy="10.4" rx="2.1" ry="2.6" transform="rotate(18 18.4 10.4)" fill="currentColor" />
+      </symbol>
+      <symbol id="pup" viewBox="0 0 32 32">
+        <ellipse cx="7.6" cy="12.5" rx="4.4" ry="7.6" transform="rotate(22 7.6 12.5)" fill="#9a6535" />
+        <ellipse cx="24.4" cy="12.5" rx="4.4" ry="7.6" transform="rotate(-22 24.4 12.5)" fill="#9a6535" />
+        <circle cx="16" cy="17" r="10" fill="#dcaa72" />
+        <ellipse cx="16" cy="21.2" rx="6.2" ry="4.6" fill="#f5e2c4" />
+        <circle cx="12.1" cy="15.6" r="1.55" fill="#2b1d14" /><circle cx="19.9" cy="15.6" r="1.55" fill="#2b1d14" />
+        <circle cx="12.6" cy="15.1" r="0.5" fill="#fff" /><circle cx="20.4" cy="15.1" r="0.5" fill="#fff" />
+        <ellipse cx="16" cy="19.3" rx="2.2" ry="1.55" fill="#2b1d14" />
+        <path d="M13.6 22.2q2.4 2 4.8 0" fill="none" stroke="#2b1d14" stroke-width="0.9" stroke-linecap="round" />
+      </symbol>
+      <!-- Goose Mode mascot (faces right; the beak tip is at x≈61, y≈17 in this viewBox) -->
+      <symbol id="goose" viewBox="0 0 64 64">
+        <path d="M24 56 l-2 6 h6 M36 56 l-1 6 h6" fill="none" stroke="#f08a24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M8 38 C8 26 22 24 32 30 C38 33 42 30 42 24 L42 14 C42 8 47 5 51 7 C55 9 55 14 54 18 L50 22 C48 28 52 36 50 44 C47 54 34 58 24 56 C14 54 8 48 8 38 Z" fill="#fbfbf6" stroke="#2a2f3a" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="M14 40 C20 36 30 38 36 44" fill="none" stroke="#c9ccd4" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M53 12 L62 16 L53 20 Z" fill="#f08a24" stroke="#2a2f3a" stroke-width="1.2" stroke-linejoin="round" />
+        <circle cx="49" cy="12" r="1.7" fill="#1d2230" /><circle cx="49.6" cy="11.4" r="0.55" fill="#fff" />
+        <path d="M45.5 8.6 L51 10" stroke="#1d2230" stroke-width="1.3" stroke-linecap="round" />
+        <path d="M2 34 L9 36 L4 40 Z" fill="#fbfbf6" stroke="#2a2f3a" stroke-width="1.4" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="goose-head" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="13" fill="#fbfbf6" stroke="#2a2f3a" stroke-width="1.6" />
+        <path d="M22 13 L31 17 L22 21 Z" fill="#f08a24" stroke="#2a2f3a" stroke-width="1.2" stroke-linejoin="round" />
+        <circle cx="16.5" cy="12.5" r="2" fill="#1d2230" /><circle cx="17.2" cy="11.8" r="0.6" fill="#fff" />
+        <path d="M12 8.6 L18.5 10.3" stroke="#1d2230" stroke-width="1.4" stroke-linecap="round" />
+      </symbol>
       <symbol id="flame" viewBox="-30 -80 60 82" overflow="visible">
         <path fill="#ff6a1f" d="M0,0 C-26,-6 -24,-40 -6,-76 C-6,-50 8,-46 10,-60 C28,-36 26,-6 0,0 Z" />
         <path fill="#ffb02e" d="M0,0 C-16,-4 -15,-28 -3,-52 C-2,-34 7,-32 8,-42 C18,-26 16,-4 0,0 Z" />
@@ -188,131 +226,155 @@
   </template>
 
   <div class="app">
-    <header class="topbar">
-      <a class="brand" href="#" id="brand-link" aria-label="Campfire Prep home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="-30 -80 60 82" width="22" height="30"><use href="#flame" x="-30" y="-80" width="60" height="82" /></svg>
-        </span>
-        <span>
-          <span class="brand-name">Campfire Prep</span>
-          <span class="brand-sub">Pre-Calc 11 · Radicals Unit Test Practice</span>
-        </span>
-      </a>
-      <nav class="main-nav" id="main-nav" aria-label="Main">
-        <button type="button" data-go="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20l9-15 9 15z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20l2-4 2 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Basecamp</span></button>
-        <button type="button" data-go="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h5a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5zM19 4h-5a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Library</span></button>
-        <button type="button" data-go="review"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Review</span><span class="nav-badge" id="nav-review-badge" hidden>0</span></button>
-        <button type="button" data-go="learning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>My Learning</span></button>
-      </nav>
-      <div class="topbar-test" id="topbar-test" hidden>
-        <div class="tb-progress">
-          <div class="tb-progress-text"><span class="tb-level" id="tb-level" hidden></span><span id="q-counter">Written Response · Q1 of 5</span><span id="answered-counter">0/20 answered</span></div>
-          <div class="seg-bar" id="seg-bar" aria-hidden="true"></div>
-        </div>
-        <div class="timer" id="timer" aria-live="off"><span class="timer-label">Time left</span><span class="timer-value" id="timer-value">60:00</span><span class="drain-badge" id="drain-badge" hidden>×2</span></div>
-        <button class="btn btn-secondary btn-pause" id="btn-pause" type="button" title="Pause (P)">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span class="btn-label">Pause</span>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <!-- ───────── Dynamic island: compact navigation + the puppy settings button ───────── -->
+    <header class="island-wrap" id="island-wrap">
+      <nav class="island" id="island" aria-label="Main">
+        <button type="button" class="island-brand" id="brand-link" aria-expanded="false" aria-controls="main-nav" data-i18n-attr="aria-label:nav.open">
+          <span class="pup-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><use href="#paw" /></svg></span>
+          <span class="island-id"><span class="island-name">DontLetThePuppyDie</span><span class="island-ctx" id="island-ctx">Home</span></span>
+          <svg class="island-chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button class="btn btn-ghost" id="btn-quit" type="button">Quit</button>
+        <div class="main-nav" id="main-nav">
+          <button type="button" data-go="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="nav.home">Home</span></button>
+          <button type="button" data-go="practice"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span data-i18n="nav.practice">Practice</span><span class="nav-badge" id="nav-review-badge" hidden>0</span></button>
+          <button type="button" data-go="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h5a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5zM19 4h-5a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="nav.concepts">Concepts</span></button>
+          <button type="button" data-go="studyroom"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a4 4 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="nav.room">Study Room</span></button>
+        </div>
+        <div class="topbar-test" id="topbar-test" hidden>
+          <div class="tb-progress">
+            <div class="tb-progress-text"><span class="tb-level" id="tb-level" hidden></span><span id="q-counter">Question 1 of 20</span><span id="answered-counter">0/20 answered</span></div>
+            <div class="seg-bar" id="seg-bar" aria-hidden="true"></div>
+          </div>
+          <div class="timer" id="timer" aria-live="off"><span class="timer-label" data-i18n="test.timeLeft">Time left</span><span class="timer-value" id="timer-value">60:00</span><span class="drain-badge" id="drain-badge" hidden>×2</span></div>
+          <button class="btn btn-secondary btn-pause" id="btn-pause" type="button" title="Pause (P)">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span class="btn-label" data-i18n="test.pause">Pause</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-quit" type="button" data-i18n="test.exit">Exit</button>
+        </div>
+        <button type="button" class="pup-btn" id="btn-settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-pop" data-i18n-attr="aria-label:nav.settings;title:nav.settings">
+          <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><use href="#pup" /></svg>
+        </button>
+      </nav>
+      <div class="settings-pop pop" id="settings-pop" role="dialog" aria-labelledby="set-title" hidden>
+        <div class="pop-head"><h2 id="set-title" data-i18n="set.title">Settings</h2><button type="button" class="icon-btn" data-close-pop data-i18n-attr="aria-label:common.close">×</button></div>
+        <section class="set-sec" aria-labelledby="set-lang-l"><h3 id="set-lang-l" data-i18n="set.language">Language</h3><div class="lang-grid" id="set-lang" role="radiogroup" aria-labelledby="set-lang-l"></div></section>
+        <section class="set-sec" aria-labelledby="set-layout-l"><h3 id="set-layout-l" data-i18n="set.layout">Layout</h3><div class="layout-opts" id="set-layout" role="radiogroup" aria-labelledby="set-layout-l"></div></section>
+        <section class="set-sec" aria-labelledby="set-theme-l"><h3 id="set-theme-l" data-i18n="set.theme">Theme</h3><div class="theme-opts" id="set-theme" role="radiogroup" aria-labelledby="set-theme-l"></div></section>
+        <section class="set-sec" id="set-goose-sec" aria-labelledby="set-goose-l"><h3 id="set-goose-l" data-i18n="goose.set.title">Gameplay</h3><div id="set-goose"></div></section>
+        <section class="set-sec" id="set-help" aria-labelledby="set-help-l"><h3 id="set-help-l" data-i18n="help.title">Help</h3>
+          <div class="help-btns"><button type="button" class="btn btn-secondary btn-sm" data-onboard="site" data-i18n="help.site">Site tour</button><button type="button" class="btn btn-secondary btn-sm" data-onboard="test" data-i18n="help.test">How tests work</button></div>
+          <p class="set-note" id="help-busy" data-i18n="help.busy" hidden>Tutorials are available when no test is open.</p></section>
+        <p class="set-note" data-i18n="set.saved">Saved on this device. No account needed.</p>
+        <p class="set-note warn" id="set-content-note" data-i18n="set.contentNote" hidden></p>
       </div>
     </header>
 
-    <main>
+    <main id="main">
       <!-- ───────── TITLE ───────── -->
       <section class="screen screen-start" id="screen-start">
         <div class="start-hero">
           <div class="hero-scene" id="hero-scene"></div>
           <div class="hero-copy">
-            <p class="eyebrow">Pre-Calc 11 · Radicals unit test practice</p>
-            <h1>Keep the fire going.<br />Keep your head cool.</h1>
-            <p class="lead">A 34-mark, 60-minute practice test laid out like the real unit test. While you work, your puppy needs you: feed the fire, but not too much.</p>
+            <p class="eyebrow" data-i18n="app.tagline">Pre-Calc 11 · Quadratic functions</p>
+            <h1 data-i18n="start.title">Don't let the puppy die.</h1>
+            <p class="lead" data-i18n="start.lead">Practise quadratic functions and graphing, from guided basics to a Nightmare gauntlet.</p>
             <div class="start-actions">
-              <button class="btn btn-primary btn-lg" id="btn-enter" type="button">Enter Basecamp</button>
-              <button class="btn btn-secondary btn-lg" id="btn-tour" type="button">How to play</button>
+              <button class="btn btn-primary btn-lg" id="btn-enter" type="button" data-i18n="start.enter">Enter</button>
+              <button class="btn btn-secondary btn-lg" id="btn-tour" type="button" data-onboard="site" data-i18n="start.tour">How it works</button>
             </div>
-            <p class="muted small" id="title-note">First time? Entering Basecamp starts a short guided tour. You can skip it.</p>
+            <p class="muted small" id="title-note">First time? Entering starts a short guided tour. You can skip it.</p>
           </div>
         </div>
       </section>
 
-      <!-- ───────── BASECAMP ───────── -->
+      <!-- ───────── HOME (dashboard) ───────── -->
       <section class="screen screen-home" id="screen-home" hidden>
-        <div class="home-head">
-          <div>
-            <p class="eyebrow">Basecamp</p>
-            <h1 id="home-greeting">Welcome to Basecamp.</h1>
-            <p class="lead" id="home-sub"></p>
+        <div class="dash" id="dash">
+          <div class="dash-left">
+            <div class="welcome">
+              <p class="eyebrow" id="home-kicker">Welcome</p>
+              <h1 id="home-greeting">Let's start with quadratic functions.</h1>
+              <p class="lead" id="home-sub"></p>
+            </div>
+            <div id="resume-box"></div>
+            <section class="glass topic-card" id="topic-card" aria-labelledby="topic-card-h"></section>
           </div>
-          <div class="home-head-actions">
-            <button class="btn btn-ghost" id="btn-tour-2" type="button">How to play</button>
+
+          <div class="dash-center">
+            <section class="glass modes-panel" aria-labelledby="modes-h">
+              <div class="panel-head">
+                <div><p class="kicker" data-i18n="diff.kicker">Choose your difficulty</p><h2 id="modes-h" data-i18n="diff.title">Find your level.</h2></div>
+                <div class="slide-ctl"><span class="muted small" data-i18n="diff.slide">Slide to explore</span>
+                  <button type="button" class="icon-btn" id="mode-prev" data-i18n-attr="aria-label:diff.prev"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                  <button type="button" class="icon-btn" id="mode-next" data-i18n-attr="aria-label:diff.next"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                </div>
+              </div>
+              <div class="mode-track" id="mode-track" role="radiogroup" aria-labelledby="modes-h"></div>
+              <div class="mode-preview" id="mode-preview" aria-live="polite"></div>
+            </section>
+            <div class="dash-row">
+              <section class="glass panel" aria-labelledby="act-h"><div class="panel-head sm"><h2 id="act-h" data-i18n="act.title">Recent activity</h2><button type="button" class="btn btn-link btn-sm" data-go="progress" data-i18n="act.viewAll">View all</button></div><div id="activity"></div></section>
+              <section class="glass panel" aria-labelledby="goals-h"><div class="panel-head sm"><h2 id="goals-h" data-i18n="goals.title">Goals</h2></div><div id="goals"></div></section>
+            </div>
+          </div>
+
+          <div class="dash-right">
+            <section class="glass panel quick" aria-labelledby="quick-h">
+              <h2 id="quick-h" class="panel-title" data-i18n="quick.title">Quick actions</h2>
+              <div class="quick-list">
+                <button type="button" class="quick-item" data-go="practice"><span class="qi-ico qi-a" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="qi-t"><b data-i18n="quick.practice">Start practice</b><small data-i18n="quick.practice.d"></small></span><span class="qi-go" aria-hidden="true">›</span></button>
+                <button type="button" class="quick-item" data-go="studyroom"><span class="qi-ico qi-b" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a4 4 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="qi-t"><b data-i18n="quick.room">Study Room</b><small data-i18n="quick.room.d"></small></span><span class="qi-go" aria-hidden="true">›</span></button>
+                <button type="button" class="quick-item" data-go="library"><span class="qi-ico qi-c" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h5a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5zM19 4h-5a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="qi-t"><b data-i18n="quick.library">Concept Library</b><small data-i18n="quick.library.d"></small></span><span class="qi-go" aria-hidden="true">›</span></button>
+                <button type="button" class="quick-item" data-go="progress"><span class="qi-ico qi-d" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="qi-t"><b data-i18n="quick.progress">View progress</b><small data-i18n="quick.progress.d"></small></span><span class="qi-go" aria-hidden="true">›</span></button>
+              </div>
+              <button class="btn btn-link btn-sm quick-tour" id="btn-tour-2" type="button" data-onboard="site" data-i18n="quick.tour">How it works</button>
+            </section>
+            <section class="glass panel stats-panel" id="stats-panel" aria-labelledby="stats-h"></section>
+            <section class="glass panel studio-only" id="studio-concepts" aria-label="Concepts at a glance"></section>
           </div>
         </div>
+        <div class="splus" id="splus"></div>
+      </section>
 
-        <div class="home-top">
-          <div class="card launch-card">
-            <div id="resume-box"></div>
-            <h2>Next practice test</h2>
-            <div class="setup-summary" id="setup-summary"></div>
-            <button class="btn btn-primary btn-lg btn-block" id="btn-create" type="button">Create test</button>
-            <button class="btn btn-link quick-start" id="btn-start" type="button">Quick start with these settings</button>
-          </div>
+      <!-- ───────── PRACTICE: skills (drills) ───────── -->
+      <section class="screen screen-practice" id="screen-practice" hidden>
+        <div class="page-head"><div><p class="eyebrow" data-i18n="prac.kicker">Practice</p><h1 data-i18n="prac.title">Practise any skill, at any level</h1></div></div>
+        <div class="prac-tabs" data-tabs="practice"></div>
+        <div id="prac-body">
+          <div id="drills"></div>
+        </div>
+        <div class="prac-run" id="prac-run" hidden></div>
+      </section>
 
+      <!-- ───────── PRACTICE: the whole BC Pre-Calculus 11 course ───────── -->
+      <section class="screen screen-course" id="screen-course" hidden>
+        <div class="page-head"><div><p class="eyebrow" data-i18n="prac.kicker">Practice</p><h1 data-i18n="course.title">The whole course</h1></div></div>
+        <div class="prac-tabs" data-tabs="course"></div>
+        <div id="course-body"></div>
+      </section>
+
+      <!-- ───────── PRACTICE: progress (tests, mastery, habits) ───────── -->
+      <section class="screen screen-progress" id="screen-progress" hidden>
+        <div class="page-head"><div><p class="eyebrow" data-i18n="prac.kicker">Practice</p><h1 data-i18n="prac.tab.progress">Progress</h1></div></div>
+        <div class="prac-tabs" data-tabs="progress"></div>
+        <div class="progress-grid">
           <div class="card stats-card">
             <div class="card-head progress-head">
-              <h2>Your progress</h2>
+              <h2>Your tests</h2>
               <div class="segmented small-seg level-seg" role="tablist" aria-label="Show progress for" id="level-pick">
-                <button type="button" role="tab" data-level="classmate">Tim's</button>
                 <button type="button" role="tab" data-level="normal">Normal</button>
-                <button type="button" role="tab" data-level="challenge">Challenge</button>
+                <button type="button" role="tab" data-level="challenge">Challenging</button>
                 <button type="button" role="tab" data-level="nightmare">Nightmare</button>
               </div>
             </div>
             <div class="stat-tiles" id="home-stats"></div>
             <div class="trend" id="trend"></div>
           </div>
-        </div>
-
-        <div class="card group-card" id="group-card">
-          <div class="group-intro">
-            <h2>Study together</h2>
-            <p class="muted">No accounts, no server. A <b>group test</b> gives everyone the same timed test. A <b>study room</b> is a shared practice set on the concepts you pick, self-paced or in sync, with optional hints and a group summary at the end. Nobody's history, answers or files are shared unless they choose to paste a result code.</p>
-          </div>
-          <div class="group-actions">
-            <div class="group-box">
-              <h3>Host</h3>
-              <button class="btn btn-primary btn-block" id="btn-group-create" type="button">Create a group test</button>
-              <button class="btn btn-secondary btn-block" id="btn-room-create" type="button">Open a study room</button>
-            </div>
-            <form class="group-box" id="join-form" autocomplete="off">
-              <h3><label for="join-code">Join with a code</label></h3>
-              <div class="join-row">
-                <input class="text-input code-input" id="join-code" type="text" placeholder="Group or room code" maxlength="24" spellcheck="false" autocapitalize="characters" />
-                <button class="btn btn-secondary" type="submit">Join</button>
-              </div>
-              <p class="form-error" id="join-error" role="alert"></p>
-            </form>
-          </div>
-        </div>
-
-        <div class="home-mid">
-          <div class="card focus-card">
-            <h2>What to work on</h2>
-            <div id="focus"></div>
-          </div>
-          <div class="card habits-card">
-            <h2>Where marks slip away</h2>
-            <div id="habits"></div>
-          </div>
-        </div>
-
-        <div class="card history-card">
-          <div class="card-head"><h2>Test history</h2><span class="muted small">Select a test to see its full review.</span></div>
-          <div id="history-list"></div>
-        </div>
-
-        <div class="card mastery-card">
-          <div class="card-head"><h2>Topic mastery</h2><span class="muted small">Recent tests count more.</span></div>
-          <div id="mastery"></div>
+          <div class="card focus-card"><h2>What to work on</h2><div id="focus"></div></div>
+          <div class="card habits-card"><h2>Where marks slip away</h2><div id="habits"></div></div>
+          <div class="card mastery-card"><div class="card-head"><h2>Topic mastery</h2><span class="muted small">Recent work counts more.</span></div><div id="mastery"></div></div>
+          <div class="card history-card"><div class="card-head"><h2>Test history</h2><span class="muted small">Select a test to see its full review.</span></div><div id="history-list"></div></div>
         </div>
       </section>
 
@@ -325,13 +387,14 @@
               <button class="icon-btn" id="lib-collapse" type="button" aria-expanded="true" aria-label="Hide the concept list"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="lib-side-body">
-              <label class="sr-only" for="lib-search">Search concepts</label>
-              <input class="text-input lib-search" id="lib-search" type="search" placeholder="Search: rationalize, x^-2…" autocomplete="off" />
+              <label class="sr-only" for="lib-search" data-i18n="lib.search">Search concepts</label>
+              <input class="text-input lib-search" id="lib-search" type="search" placeholder="Search: vertex, discriminant…" autocomplete="off" data-i18n-attr="aria-label:lib.search" />
+              <button type="button" class="lib-formula-btn" id="lib-formulas"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 5h14M5 12h9M5 19h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="lib.formulas">Formula reference</span></button>
               <div class="lib-filter" id="lib-filter" role="group" aria-label="Filter concepts">
-                <button type="button" data-filter="all" class="active" aria-pressed="true">All</button>
-                <button type="button" data-filter="attention" aria-pressed="false">Attention</button>
-                <button type="button" data-filter="due" aria-pressed="false">Due</button>
-                <button type="button" data-filter="new" aria-pressed="false">New</button>
+                <button type="button" data-filter="all" class="active" aria-pressed="true" data-i18n="lib.all">All</button>
+                <button type="button" data-filter="attention" aria-pressed="false" data-i18n="lib.attention">Attention</button>
+                <button type="button" data-filter="due" aria-pressed="false" data-i18n="lib.due">Due</button>
+                <button type="button" data-filter="new" aria-pressed="false" data-i18n="lib.new">New</button>
               </div>
               <div id="lib-nav"></div>
             </div>
@@ -345,31 +408,65 @@
       <section class="screen screen-review" id="screen-review" hidden>
         <div class="page-head">
           <div>
-            <p class="eyebrow">Review</p>
+            <p class="eyebrow" data-i18n="prac.kicker">Practice</p>
             <h1>Remember what you've learned</h1>
             <p class="lead">Spaced reviews bring each concept back just before you'd forget it, and the Mistake Notebook keeps every question you got wrong until you've fixed it.</p>
           </div>
         </div>
+        <div class="prac-tabs" data-tabs="review"></div>
         <div id="rv-body"></div>
       </section>
 
-      <!-- ───────── MY LEARNING (Learning Analyst) ───────── -->
+      <!-- ───────── STUDY PLAN (Learning Analyst) ───────── -->
       <section class="screen screen-learning" id="screen-learning" hidden>
         <div class="page-head">
           <div>
-            <p class="eyebrow">My Learning</p>
+            <p class="eyebrow" data-i18n="prac.kicker">Practice</p>
             <h1>What to study next</h1>
             <p class="lead" id="ml-sources"></p>
           </div>
         </div>
+        <div class="prac-tabs" data-tabs="learning"></div>
         <div id="ml-body"></div>
       </section>
 
-      <!-- ───────── STUDY ROOM ───────── -->
+      <!-- ───────── STUDY ROOM: landing ───────── -->
+      <section class="screen screen-studyroom" id="screen-studyroom" hidden>
+        <div class="page-head"><div><p class="eyebrow" data-i18n="room.kicker">Study Room</p><h1 data-i18n="room.title">Learn together</h1></div></div>
+        <div class="sr-grid">
+          <section class="glass panel sr-card" id="group-card">
+            <h2 data-i18n="room.create">Open a study room</h2>
+            <p class="muted">A shared practice set on the concepts you pick, self-paced or in sync, with optional hints and a group summary at the end.</p>
+            <button class="btn btn-primary btn-block" id="btn-room-create" type="button" data-i18n="room.create">Open a study room</button>
+            <div id="room-resume-box"></div>
+            <hr class="soft" />
+            <h3 data-i18n="room.group">Create a group test</h3>
+            <p class="muted small">Everyone gets the same timed test. Start together or each on your own clock.</p>
+            <button class="btn btn-secondary btn-block" id="btn-group-create" type="button" data-i18n="room.group">Create a group test</button>
+          </section>
+          <section class="glass panel sr-card">
+            <form class="group-box" id="join-form" autocomplete="off">
+              <h2><label for="join-code" data-i18n="room.join">Join with a code</label></h2>
+              <div class="join-row">
+                <input class="text-input code-input" id="join-code" type="text" placeholder="Group or room code" maxlength="24" spellcheck="false" autocapitalize="characters" data-i18n-attr="placeholder:room.codePh" />
+                <button class="btn btn-primary" type="submit" data-i18n="room.joinBtn">Join</button>
+              </div>
+              <p class="form-error" id="join-error" role="alert"></p>
+            </form>
+            <div class="sr-split">
+              <div><h3 data-i18n="room.shared">Shared with the room</h3><p class="small muted" data-i18n="room.sharedList"></p></div>
+              <div><h3 data-i18n="room.private">Private to you</h3><p class="small muted" data-i18n="room.privateList"></p></div>
+            </div>
+            <p class="small sr-honest" data-i18n="room.honest"></p>
+          </section>
+        </div>
+      </section>
+
+      <!-- ───────── STUDY ROOM: in a room ───────── -->
       <section class="screen screen-room" id="screen-room" hidden>
         <div class="page-head room-head">
           <div>
-            <p class="eyebrow">Study room</p>
+            <p class="eyebrow" data-i18n="room.kicker">Study room</p>
             <h1>Practise together</h1>
             <div class="room-meta" id="room-meta"></div>
           </div>
@@ -427,39 +524,47 @@
         </div>
       </section>
 
-      <!-- ───────── TEST ───────── -->
+      <!-- ───────── TEST WORKSPACE ───────── -->
       <section class="screen screen-test" id="screen-test" hidden>
-        <div class="test-layout">
+        <div class="test-layout" id="test-layout">
           <aside class="buddy-panel" aria-label="Campfire buddy">
             <div class="scene-slot" id="test-scene"></div>
             <p class="buddy-status" id="buddy-status" role="status">Your puppy is cozy.</p>
+            <button type="button" class="camp-help" id="btn-camp-help" data-onboard="game" data-i18n-attr="aria-label:help.camp;title:help.camp">?</button>
             <div class="comp" id="companion" hidden></div>
           </aside>
 
           <div class="test-main">
-            <article class="paper" id="question-card">
+            <article class="paper canvas" id="question-card">
               <div class="paper-head">
                 <span class="paper-tags"><span class="q-label" id="q-label">Q1</span><span class="topic-tag" id="q-topic">Topic</span></span>
-                <button class="flag-btn" id="btn-flag" type="button" aria-pressed="false">⚑ Flag</button>
+                <span class="paper-actions">
+                  <button class="hint-btn" id="btn-hint" type="button"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span id="hint-label">Hint</span></button>
+                  <button class="flag-btn" id="btn-flag" type="button" aria-pressed="false">⚐ Flag</button>
+                </span>
               </div>
               <div id="q-body"></div>
+              <div class="hint-box" id="hint-box" hidden aria-live="polite"></div>
             </article>
 
             <div class="q-nav">
-              <button class="btn btn-secondary" id="btn-prev" type="button">← Previous</button>
-              <button class="btn btn-secondary" id="btn-next" type="button">Next →</button>
+              <button class="btn btn-secondary" id="btn-prev" type="button"><span aria-hidden="true">←</span> <span data-i18n="test.prev">Previous</span></button>
+              <button class="btn btn-quiet nav-pop-btn" id="btn-navpop" type="button" aria-expanded="false" aria-controls="navigator"><span data-i18n="test.questions">Questions</span> <span id="navpop-count"></span></button>
+              <button class="btn btn-secondary" id="btn-next" type="button"><span data-i18n="test.next">Next</span> <span aria-hidden="true">→</span></button>
             </div>
 
-            <div class="card navigator">
+            <div class="card navigator" id="navigator">
               <div class="navigator-head">
-                <span>Questions</span>
+                <span data-i18n="test.questions">Questions</span>
                 <span class="legend"><i class="dot dot-answered"></i>answered <i class="dot dot-partial"></i>partly <i class="dot dot-flagged"></i>flagged</span>
               </div>
               <div class="nav-grid" id="nav-grid"></div>
-              <button class="btn btn-primary btn-block" id="btn-submit" type="button">Submit test</button>
+              <button class="btn btn-primary btn-block" id="btn-submit" type="button" data-i18n="test.submit">Submit test</button>
             </div>
-            <p class="kbd-hint">Shortcuts (when not typing): <kbd>1</kbd>–<kbd>4</kbd> pick a choice · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>F</kbd> add log<span id="kbd-comp"></span> · <kbd>N</kbd> scratchpad · <kbd>P</kbd> pause</p>
+            <p class="kbd-hint">Shortcuts (when not typing): <kbd>1</kbd>–<kbd>4</kbd> pick a choice · <kbd>←</kbd> <kbd>→</kbd> move · <kbd>H</kbd> hint<span class="k-fuel"> · <kbd>F</kbd> add log<span id="kbd-comp"></span></span> · <kbd>N</kbd> scratchpad · <kbd>P</kbd> pause</p>
           </div>
+
+          <aside class="test-info" id="test-info" aria-label="Formula reference for this question"></aside>
 
           <aside class="heat-panel" aria-label="Fire heat">
             <span class="heat-label heat-label-hot" aria-hidden="true">🔥 Too hot</span>
@@ -487,28 +592,17 @@
             <p class="lead" id="results-date"></p>
           </div>
           <div class="results-actions">
-            <button class="btn btn-primary" id="btn-again" type="button">New test</button>
-            <button class="btn btn-secondary" id="btn-home" type="button">Back to Basecamp</button>
+            <button class="btn btn-primary" id="btn-again" type="button" data-i18n="res.again">New test</button>
+            <button class="btn btn-secondary" id="btn-home" type="button" data-i18n="res.home">Back to Home</button>
           </div>
         </div>
-
         <div class="best-banner" id="best-banner"></div>
-
         <div class="stat-grid" id="stat-grid"></div>
-
         <div class="card group-board" id="group-board" hidden></div>
-
-        <div class="results-grid">
-          <div class="card">
-            <h2>By section</h2>
-            <div id="topic-breakdown"></div>
-          </div>
-          <div class="card">
-            <h2>Campfire report</h2>
-            <div id="buddy-report"></div>
-          </div>
+        <div class="results-grid" id="results-grid">
+          <div class="card"><h2>By section</h2><div id="topic-breakdown"></div></div>
+          <div class="card" id="buddy-card"><h2>Puppy report</h2><div id="buddy-report"></div></div>
         </div>
-
         <div class="card review-card">
           <div class="review-head">
             <h2>Review</h2>
@@ -524,12 +618,22 @@
       </section>
     </main>
 
+    <!-- ───────── Floating tools ───────── -->
+    <div class="tools" id="tools">
+      <button type="button" class="tools-btn" id="tools-btn" aria-expanded="false" aria-controls="tools-menu" data-i18n-attr="aria-label:tools.title;title:tools.title">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <div class="tools-menu pop" id="tools-menu" role="menu" hidden>
+        <button type="button" role="menuitemcheckbox" aria-checked="false" data-tool="calc"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="tools.calc">Calculator</span><span></span></button>
+        <button type="button" role="menuitemcheckbox" aria-checked="false" data-tool="pad"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="tools.pad">Scratchpad</span><kbd>N</kbd></button>
+      </div>
+    </div>
+    <section class="fpanel calc-panel" id="calc-panel" hidden role="dialog" aria-label="Calculator"></section>
 
-    <!-- Floating scratchpad (test screen only) -->
     <section class="scratchpad" id="scratchpad" hidden aria-label="Scratchpad">
       <div class="sp-window">
         <header class="sp-head" title="Drag to move · double-click to expand">
-          <span class="sp-title"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Scratchpad <span class="sp-page"></span></span>
+          <span class="sp-title"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="tools.pad">Scratchpad</span> <span class="sp-page"></span></span>
           <span class="sp-win">
             <button type="button" data-win="big" title="Expand / restore" aria-label="Expand scratchpad"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
             <button type="button" data-win="min" title="Minimize (N)" aria-label="Minimize scratchpad"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
@@ -538,15 +642,17 @@
         <div class="sp-tools"></div>
         <div class="sp-surface">
           <canvas class="sp-canvas"></canvas>
-          <p class="sp-hint">Hold the left mouse button to write. Each question gets its own page, and your scratch work shows up in the review.</p>
+          <textarea class="sp-text" aria-label="Typed working" data-i18n-attr="placeholder:pad.typeHint"></textarea>
+          <p class="sp-hint" data-i18n="pad.hint">Hold the left mouse button to write.</p>
         </div>
         <div class="sp-resize" title="Drag to resize" aria-hidden="true"></div>
       </div>
       <button class="sp-mini" type="button" title="Open scratchpad (N)">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Scratchpad <span class="sp-mini-page"></span><i class="sp-ink-dot" aria-hidden="true"></i>
+        <span data-i18n="tools.pad">Scratchpad</span> <span class="sp-mini-page"></span><i class="sp-ink-dot" aria-hidden="true"></i>
       </button>
     </section>
+
     <!-- Floating AI tutor (hidden during any unfinished test) -->
     <div class="tutor" id="tutor" hidden>
       <button class="tutor-launcher" id="tutor-launcher" type="button" aria-expanded="false" aria-controls="tutor-panel" aria-label="Ask the AI tutor">
@@ -583,9 +689,8 @@
       </section>
     </div>
 
-    <footer class="footer">Made for Pre-Calc 11 study sessions. Progress is saved in this browser only.</footer>
+    <footer class="footer">DontLetThePuppyDie · Pre-Calc 11 practice. Progress is saved in this browser only.</footer>
   </div>
-
   <!-- Pause lock: covers the whole test so nothing can be read or answered -->
   <div class="pause-overlay" id="pause-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
     <div class="pause-card">
@@ -616,14 +721,15 @@
     </div>
   </div>
 
-  <!-- Guided tour -->
+  <!-- Guided tours (site tour, test-taking tutorial, campfire tutorial): one engine, js/tour.js -->
   <div class="tour" id="tour" hidden>
     <div class="tour-block" id="tour-block"></div>
-    <div class="tour-spot" id="tour-spot"></div>
-    <div class="tour-card" id="tour-card" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-text">
-      <div class="tour-progress" id="tour-progress"></div>
+    <div class="tour-spot" id="tour-spot" aria-hidden="true"></div>
+    <div class="tour-card" id="tour-card" role="dialog" aria-modal="false" aria-labelledby="tour-title" aria-describedby="tour-text">
+      <div class="tour-top"><span class="tour-count" id="tour-count"></span><span class="tour-progress" id="tour-progress" aria-hidden="true"></span><button class="tour-x" id="tour-exit" type="button">×</button></div>
       <h3 id="tour-title"></h3>
-      <div id="tour-text"></div>
+      <div id="tour-text" aria-live="polite"></div>
+      <div class="tour-extra" id="tour-extra" hidden></div>
       <div class="tour-actions">
         <button class="btn btn-link" id="tour-skip" type="button">Skip tour</button>
         <span class="tour-nav">
@@ -641,17 +747,11 @@
       <div class="setup-section">
         <span class="field-label" id="s-level-label">Level</span>
         <div class="segmented" role="radiogroup" aria-labelledby="s-level-label" id="s-level">
-          <button type="button" role="radio" data-level="classmate">Tim's Test</button>
           <button type="button" role="radio" data-level="normal">Normal</button>
-          <button type="button" role="radio" data-level="challenge">Challenge</button>
+          <button type="button" role="radio" data-level="challenge">Challenging</button>
           <button type="button" role="radio" data-level="nightmare" class="nm-level">Nightmare</button>
         </div>
         <span class="field-hint" id="s-level-hint"></span>
-        <div class="nm-pick" id="s-nm" role="radiogroup" aria-labelledby="s-nm-label" hidden>
-          <span class="field-label" id="s-nm-label">Choose your Nightmare <span class="nm-req">required</span></span>
-          <div class="nm-cards" id="s-nm-cards"></div>
-          <p class="form-error" id="s-nm-error" role="alert"></p>
-        </div>
       </div>
 
       <div class="setup-section">
@@ -680,6 +780,7 @@
               <button type="button" role="radio" data-mode="normal">Normal</button>
             </div>
           </div>
+          <p class="camp-tut"><button type="button" class="btn btn-link btn-sm" data-onboard="game-next" data-i18n="help.campNext">Show the campfire tutorial when the test starts</button> <span class="field-hint" id="s-camp-tut-note" data-i18n="help.campQueued" hidden></span></p>
           <details class="camp-custom" id="s-camp-custom">
             <summary>Customize <span class="faint" id="s-camp-custom-sum"></span></summary>
           <div class="comp-setup" id="s-comp">
@@ -792,7 +893,11 @@
   </dialog>
 
   <script src="vendor/katex/katex.min.js" defer></script>
+  <script src="js/i18n.js" defer></script>
   <script src="js/mathcheck.js" defer></script>
+  <script src="js/quad-engine.js" defer></script>
+  <script src="js/graph.js" defer></script>
+  <script src="js/quad-bank.js" defer></script>
   <script src="js/bank-mc.js" defer></script>
   <script src="js/bank-nr.js" defer></script>
   <script src="js/bank-wr.js" defer></script>
@@ -805,6 +910,18 @@
   <script src="js/scratchpad.js" defer></script>
   <script src="js/insights.js" defer></script>
   <script src="js/concepts.js" defer></script>
+  <script src="js/quad-content.js" defer></script>
+  <script src="js/course-content.js" defer></script>
+  <script src="js/engine/answers.js" defer></script>
+  <script src="js/engine/bank.js" defer></script>
+  <script src="js/curriculum.js" defer></script>
+  <script src="js/gen/unit-ab.js" defer></script>
+  <script src="js/gen/unit-cd.js" defer></script>
+  <script src="js/gen/unit-e.js" defer></script>
+  <script src="js/gen/unit-f.js" defer></script>
+  <script src="js/gen/unit-g.js" defer></script>
+  <script src="js/gen/unit-h.js" defer></script>
+  <script src="js/gen/unit-i.js" defer></script>
   <script src="js/learning.js" defer></script>
   <script src="js/docs.js" defer></script>
   <script src="js/practice.js" defer></script>
@@ -814,6 +931,13 @@
   <script src="js/analyst.js" defer></script>
   <script src="js/tutor.js" defer></script>
   <script src="js/tour.js" defer></script>
+  <script src="js/i18n-tour.js" defer></script>
+  <script src="js/i18n-splus.js" defer></script>
+  <script src="js/i18n-goose.js" defer></script>
+  <script src="js/onboarding.js" defer></script>
+  <script src="js/calculator.js" defer></script>
+  <script src="js/tools.js" defer></script>
+  <script src="js/goose.js" defer></script>
   <script src="js/app.js" defer></script>
   <!-- Self-check: if the css/, js/ or vendor/ folders didn't upload, say so instead of looking broken -->
   <script>
@@ -823,6 +947,7 @@
       if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") missing.push("css/style.css");
       if (!window.MathCheck) missing.push("js/mathcheck.js");
       if (!window.MC_BANK || !window.WR_BANK) missing.push("js/bank-*.js");
+      if (!window.QuadBank || !window.QuadCheck || !window.Graph) missing.push("js/quad-*.js, js/graph.js");
       if (!window.Campfire) missing.push("js/campfire.js");
       if (!window.katex) missing.push("vendor/katex/katex.min.js");
       if (!window.Practice || !window.Review || !window.Rooms) missing.push("js/practice.js, js/review.js, js/rooms.js");
@@ -830,7 +955,7 @@
       var box = document.createElement("div");
       box.className = "deploy-check";
       box.setAttribute("role", "alert");
-      box.innerHTML = "<b>Campfire Prep couldn't load some of its files.</b> The page found <code>index.html</code>, but not:" +
+      box.innerHTML = "<b>DontLetThePuppyDie couldn't load some of its files.</b> The page found <code>index.html</code>, but not:" +
         "<ul><li><code>" + missing.join("</code></li><li><code>") + "</code></li></ul>" +
         "The <code>css</code>, <code>js</code> and <code>vendor</code> <b>folders</b> need to sit next to <code>index.html</code> at the top of the repo. " +
         "Open your GitHub repo: you should see those three folders. If you don't, upload them (drag the folders themselves, not just the files inside), then Vercel redeploys automatically.";

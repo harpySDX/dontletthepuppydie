@@ -2,6 +2,9 @@
  * Campfire buddy simulation.
  * Heat runs 0–100. It drops over time; each log adds heat gradually as it catches.
  *   heat ≥ 100 → the camp catches fire     heat ≤ 0 → the puppy freezes
+ * With the Companion extras, two more hazards end the round: the kettle blowing (js/companion.js) and the fire
+ * running out of oxygen. Every hazard goes through ONE terminal-state path, die(cause): it stops the simulation
+ * (tick() does nothing until the student recovers), fires onEvent once, and can't fire again until recovery.
  */
 (function () {
   const MODES = {
@@ -14,6 +17,7 @@
   const LOG_BURN_IN = 3.2;   // seconds for a log to fully catch
   const BURN_SECONDS = 3.5;  // length of the "everything is on fire" animation
   const COZY_MIN = 25, COZY_MAX = 75;
+  const TERMINAL = ["burnt", "frozen", "kettle", "oxygen"];
 
   class Campfire {
     constructor(els, mode = "normal") {
@@ -21,9 +25,9 @@
       this.mode = MODES[mode] ? mode : "normal";
       this.heat = 55;
       this.pending = [];
-      this.status = "ok"; // ok | burning | burnt | frozen
+      this.status = "ok"; // ok | burning | burnt | frozen | kettle | oxygen  (everything but ok/burning is terminal)
       this.burnTimer = 0;
-      this.stats = { fires: 0, freezes: 0, logs: 0, cozySeconds: 0, totalSeconds: 0, minHeat: 55, maxHeat: 55 };
+      this.stats = { fires: 0, freezes: 0, kettleDeaths: 0, oxygenDeaths: 0, logs: 0, cozySeconds: 0, totalSeconds: 0, minHeat: 55, maxHeat: 55 };
       this._raf = null;
       this._last = 0;
       this._lastMsg = "";
@@ -35,6 +39,27 @@
     }
 
     static get MODES() { return MODES; }
+    static get TERMINAL() { return TERMINAL; }
+    get dead() { return TERMINAL.includes(this.status); }
+
+    // The one way a round ends. cause: "burnt" | "frozen" | "kettle" | "oxygen". Idempotent: returns false (and does
+    // nothing) if the round has already ended or a fire is already burning, so no hazard can "kill twice".
+    die(cause) {
+      if (this.status !== "ok" || this.mode === "off") return false;
+      this.pending = [];
+      if (cause === "burnt") { this.heat = 100; this.status = "burning"; this.burnTimer = BURN_SECONDS; this.stats.fires++; return true; } // onEvent after the animation
+      if (cause === "frozen") { this.heat = 0; this.stats.freezes++; }
+      if (cause === "kettle") this.stats.kettleDeaths++;
+      if (cause === "oxygen") this.stats.oxygenDeaths++;
+      this.status = cause;
+      if (this.onEvent) this.onEvent(cause);
+      return true;
+    }
+    // Back to a fresh, safe round (Thaw / Rebuild / Relight, or "Keep going" after a game over)
+    _recover(heat) {
+      this.status = "ok"; this.heat = heat; this.pending = [];
+      if (this.comp && this.comp.recover) this.comp.recover();
+    }
 
     start() {
       if (this.mode === "off" || this._raf) return;
@@ -45,6 +70,7 @@
         this._last = t;
         this.tick(dt);
         this.render();
+        if (!this._raf) return; // stop() was called during this frame (e.g. a game over): stay stopped
         this._raf = requestAnimationFrame(loop);
       };
       this._raf = requestAnimationFrame(loop);
@@ -63,8 +89,9 @@
 
     addFuel() {
       if (this.mode === "off") return;
-      if (this.status === "frozen") { this.status = "ok"; this.heat = 45; this.pending = []; this.flash("thaw"); return this.render(); }
-      if (this.status === "burnt") { this.status = "ok"; this.heat = 50; this.pending = []; this.flash("rebuild"); return this.render(); }
+      if (this.status === "frozen") { this._recover(45); this.flash("thaw"); return this.render(); }
+      if (this.status === "burnt") { this._recover(50); this.flash("rebuild"); return this.render(); }
+      if (this.status === "kettle" || this.status === "oxygen") { this._recover(50); this.flash("relight"); return this.render(); }
       if (this.status === "burning") return;
       if (this.comp && this.comp.locked()) { this.comp.notify("Your puppy's resting in the tent. The fire can wait a moment.", "warn"); return; }
       this.pending.push({ left: LOG_HEAT * (this.comp ? this.comp.logMul() : 1) });
@@ -107,9 +134,7 @@
 
     // Revive after a game over (used by "Keep going")
     revive() {
-      this.status = "ok";
-      this.heat = 50;
-      this.pending = [];
+      this._recover(50);
       this.stats.revives = (this.stats.revives || 0) + 1;
       this.render();
     }
@@ -136,6 +161,7 @@
       }
       if (this.status !== "ok") return;
       if (this.comp) this.comp.tick(dt);
+      if (this.status !== "ok") return; // the kettle or oxygen ended the round
 
       const m = MODES[this.mode].decay;
       const decay = (0.25 + this.heat * 0.003) * m * (this.comp ? this.comp.coolMul() : 1); // hotter fires burn faster
@@ -155,19 +181,9 @@
       this.stats.minHeat = Math.min(this.stats.minHeat, this.heat);
       this.stats.maxHeat = Math.max(this.stats.maxHeat, this.heat);
 
-      if (this.heat >= 100) {
-        this.heat = 100;
-        this.pending = [];
-        this.status = "burning";
-        this.burnTimer = BURN_SECONDS;
-        this.stats.fires++;
-      } else if (this.heat <= 0) {
-        this.heat = 0;
-        this.pending = [];
-        this.status = "frozen";
-        this.stats.freezes++;
-        if (this.onEvent) this.onEvent("frozen");
-      }
+      if (this.status !== "ok") return; // a companion hazard ended the round during this tick
+      if (this.heat >= 100) this.die("burnt");
+      else if (this.heat <= 0) this.die("frozen");
     }
 
     message() {
@@ -176,6 +192,8 @@
         case "burning": return ["🔥 FIRE! The whole camp is burning!", "danger"];
         case "burnt": return ["The camp burned down. Press Rebuild to set up again.", "danger"];
         case "frozen": return ["Your puppy froze into an ice cube! Press Thaw.", "danger"];
+        case "kettle": return ["💥 The kettle blew! The camp is wrecked. Press Relight to start again.", "danger"];
+        case "oxygen": return ["The fire ran out of oxygen and smothered the camp. Press Relight.", "danger"];
       }
       if (this.mode === "off") return ["", ""];
       if (h < 12) return ["Brrr! Your puppy is freezing — add a log!", "danger"];
@@ -199,6 +217,8 @@
         scene.classList.toggle("is-frozen", this.status === "frozen");
         scene.classList.toggle("is-burning", this.status === "burning");
         scene.classList.toggle("is-burnt", this.status === "burnt");
+        scene.classList.toggle("is-blown", this.status === "kettle");
+        scene.classList.toggle("is-smothered", this.status === "oxygen");
       }
       if (gauge) {
         gauge.style.setProperty("--heat", h.toFixed(2));
@@ -207,7 +227,7 @@
         gauge.dataset.state = this.status !== "ok" ? "danger" : h < 12 || h > 88 ? "danger" : h < COZY_MIN || h > COZY_MAX ? "warn" : "ok";
       }
       if (button) {
-        const label = this.status === "frozen" ? "Thaw puppy" : this.status === "burnt" ? "Rebuild camp" : this.status === "burning" ? "Burning…" : "Add log";
+        const label = this.status === "frozen" ? "Thaw puppy" : this.status === "burnt" ? "Rebuild camp" : this.status === "kettle" || this.status === "oxygen" ? "Relight camp" : this.status === "burning" ? "Burning…" : "Add log";
         if (buttonText.textContent !== label) buttonText.textContent = label;
         button.disabled = this.status === "burning" || !!(this.comp && this.comp.locked());
         button.dataset.state = this.status;
@@ -228,6 +248,8 @@
         turnedOff: !!this.turnedOff,
         fires: s.fires,
         freezes: s.freezes,
+        kettleDeaths: s.kettleDeaths || 0,
+        oxygenDeaths: s.oxygenDeaths || 0,
         logs: s.logs,
         cozyPercent: s.totalSeconds > 0 ? Math.round((s.cozySeconds / s.totalSeconds) * 100) : 100,
         revives: s.revives || 0,

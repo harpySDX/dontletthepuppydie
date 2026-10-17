@@ -396,6 +396,10 @@ body.buddy-off .buddy-panel, body.buddy-off .heat-panel, body.buddy-off .kbd-hin
 .scene.is-burnt .flames { transform: scale(0.05); }
 .scene.is-burnt .smoke { opacity: 0.8; }
 .scene.is-burnt .glow { opacity: 0.1; }
+.scene.is-blown .puppy-body, .scene.is-blown .tent, .scene.is-smothered .puppy-body, .scene.is-smothered .tent { filter: brightness(0.45) saturate(0.25); }
+.scene.is-blown .flames, .scene.is-smothered .flames { transform: scale(0.05); }
+.scene.is-blown .smoke, .scene.is-smothered .smoke { opacity: 0.85; }
+.scene.is-blown .glow, .scene.is-smothered .glow { opacity: 0.08; }
 
 /* ───────────────────────── Results ───────────────────────── */
 .results-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin: 8px 0 18px; }

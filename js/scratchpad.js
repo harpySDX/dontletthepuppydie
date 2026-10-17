@@ -56,10 +56,15 @@
       this.surface = root.querySelector(".sp-surface");
       this.strokes = [];
       this.cleared = null;
+      this.page = null;      // object holding .notes (typed working) for this page
+      this.text = root.querySelector(".sp-text");
+      this.mode = "draw";
       this.onChange = () => {};
       this.tool = { color: COLORS[0].c, size: SIZES[0], eraser: false };
-      this.prefs = Object.assign({ x: null, y: null, w: 340, h: 300, min: window.innerWidth < 760, big: false }, loadPrefs());
+      // starts tucked away as a small pill; it opens from the pill, the Tools menu or N
+      this.prefs = Object.assign({ x: null, y: null, w: 340, h: 300, min: true, big: false }, loadPrefs());
       this._buildToolbar();
+      this._bindText();
       this._bindDrawing();
       this._bindWindow();
       new ResizeObserver(() => this._fitCanvas()).observe(this.surface);
@@ -79,9 +84,12 @@
       this._fitCanvas();
     }
     toggleMin() { this.prefs.min = !this.prefs.min; savePrefs(this.prefs); this._applyMin(); if (!this.prefs.min) this._fitCanvas(); }
-    setPage(strokes, label) {
+    setPage(strokes, label, page) {
       this.strokes = strokes;
       this.cleared = null;
+      this.page = page || null;
+      if (this.text) { this.text.value = (page && page.notes) || ""; this.text.disabled = !page; }
+      this._setMode(this.mode);
       this.root.querySelector(".sp-page").textContent = label ? `· ${label}` : "";
       this.root.querySelector(".sp-mini-page").textContent = label || "";
       this._updateCount();
@@ -116,10 +124,25 @@
       return true;
     }
 
+    // ───────── typed working ─────────
+    _bindText() {
+      if (!this.text) return;
+      this.text.addEventListener("input", () => { if (this.page) { this.page.notes = this.text.value; this._updateCount(); this.onChange(); } });
+      this.text.addEventListener("keydown", (e) => e.stopPropagation()); // typing here never triggers test shortcuts
+    }
+    _setMode(m) {
+      this.mode = m;
+      this.root.classList.toggle("typing", m === "type");
+      for (const b of this.root.querySelectorAll("[data-mode]")) { const on = b.dataset.mode === m; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on)); }
+      if (m === "draw") this._fitCanvas();
+    }
     // ───────── toolbar ─────────
     _buildToolbar() {
       const bar = this.root.querySelector(".sp-tools");
+      const t = (k, en) => (window.I18N ? window.I18N.t(k) : en);
       bar.innerHTML = `
+        <span class="sp-modes" role="group" aria-label="Scratchpad mode"><button type="button" data-mode="draw" class="active" aria-pressed="true">${t("pad.draw", "Draw")}</button><button type="button" data-mode="type" aria-pressed="false">${t("pad.type", "Type")}</button></span>
+        <span class="sp-sep"></span>
         ${COLORS.map((c, i) => `<button type="button" class="sp-color${i === 0 ? " active" : ""}" data-color="${c.c}" title="${c.name}" aria-label="${c.name}" style="--swatch:${c.c}"></button>`).join("")}
         <span class="sp-sep"></span>
         ${SIZES.map((s, i) => `<button type="button" class="sp-size${i === 0 ? " active" : ""}" data-size="${s}" title="${["Fine", "Medium", "Thick"][i]} line" aria-label="${["Fine", "Medium", "Thick"][i]} line"><i style="width:${s + 2}px;height:${s + 2}px"></i></button>`).join("")}
@@ -127,13 +150,14 @@
         <button type="button" class="sp-btn sp-eraser" data-act="eraser" title="Eraser" aria-label="Eraser" aria-pressed="false">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M16.2 3.8a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L10 18H6l-2.2-2.2a2 2 0 0 1 0-2.8zM8 11l5 5M6 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button type="button" class="sp-btn" data-act="undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+        <button type="button" class="sp-btn" data-act="undo" title="${t("pad.undo", "Undo")} (Ctrl+Z)" aria-label="${t("pad.undo", "Undo")}">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button type="button" class="sp-btn sp-clear" data-act="clear" title="Clear page" aria-label="Clear page">Clear</button>`;
+        <button type="button" class="sp-btn sp-clear" data-act="clear" title="${t("pad.clear", "Clear")}" aria-label="${t("pad.clear", "Clear")}">${t("pad.clear", "Clear")}</button>`;
       bar.addEventListener("click", (e) => {
         const b = e.target.closest("button");
         if (!b) return;
+        if (b.dataset.mode) { this._setMode(b.dataset.mode); if (b.dataset.mode === "type" && this.text) this.text.focus(); return; }
         if (b.dataset.color) {
           this.tool.color = b.dataset.color;
           this._setEraser(false);
@@ -154,27 +178,37 @@
       this.surface.classList.toggle("erasing", on);
     }
     undo() {
+      if (this.mode === "type") {
+        if (!this.text) return;
+        if (!this.text.value && this.lastText) { this.text.value = this.lastText; this.lastText = null; if (this.page) this.page.notes = this.text.value; this._updateCount(); this.onChange(); return; }
+        this.text.focus(); try { document.execCommand("undo"); } catch { /* not supported */ }
+        return;
+      }
       if (this.strokes.length) this.strokes.pop();
       else if (this.cleared) { this.strokes.push(...this.cleared); this.cleared = null; }
       else return;
       this.redraw(); this._updateCount(); this.onChange();
     }
     _clear(btn) {
-      if (!this.strokes.length) return;
+      const t = (k, en) => (window.I18N ? window.I18N.t(k) : en);
+      const typing = this.mode === "type";
+      // nothing meaningful to lose → nothing to confirm
+      if (typing ? !(this.text && this.text.value.trim()) : !this.strokes.length) return;
       if (!btn.classList.contains("confirm")) {
         btn.classList.add("confirm");
-        btn.textContent = "Sure?";
+        btn.textContent = t("pad.sure", "Clear this page?");
         clearTimeout(this._clrT);
-        this._clrT = setTimeout(() => { btn.classList.remove("confirm"); btn.textContent = "Clear"; }, 2500);
+        this._clrT = setTimeout(() => { btn.classList.remove("confirm"); btn.textContent = t("pad.clear", "Clear"); }, 3000);
         return;
       }
       clearTimeout(this._clrT);
-      btn.classList.remove("confirm"); btn.textContent = "Clear";
-      this.cleared = this.strokes.splice(0);
+      btn.classList.remove("confirm"); btn.textContent = t("pad.clear", "Clear");
+      if (typing) { this.lastText = this.text.value; this.text.value = ""; if (this.page) this.page.notes = ""; }
+      else this.cleared = this.strokes.splice(0);
       this.redraw(); this._updateCount(); this.onChange();
     }
     _updateCount() {
-      this.root.querySelector(".sp-mini").classList.toggle("has-ink", this.strokes.length > 0);
+      this.root.querySelector(".sp-mini").classList.toggle("has-ink", this.strokes.length > 0 || !!(this.text && this.text.value.trim()));
       this.root.querySelector(".sp-hint").hidden = this.strokes.length > 0;
     }
 

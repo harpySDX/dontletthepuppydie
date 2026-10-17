@@ -28,8 +28,9 @@ test("concept links (prereqs/related) point at real concepts", () => {
 test("every concept has lesson content and at least 4 quiz questions (MC/NR, normal + Tim's)", () => {
   for (const c of Concepts.CONCEPTS) {
     assert.ok(c.summary && c.explanation.length && c.examples.length >= 2 && c.mistakes.length >= 2, `${c.id} content`);
-    const n = [...W.MC_BANK, ...W.CLASSMATE.mc, ...W.NR_BANK, ...W.CLASSMATE.nr].filter((q) => Concepts.conceptsFor(q).includes(c.id)).length;
-    assert.ok(n >= 4, `${c.id} only has ${n} quiz questions`);
+    // every concept practises through the question bank at a fixed level (generated families + authored banks)
+    const sel = W.Bank.select({ concept: c.id, mode: "normal", n: 6, record: false });
+    assert.ok(!sel.unavailable && sel.items.length >= 4, `${c.id} only has ${sel.items.length} quiz questions`);
   }
 });
 

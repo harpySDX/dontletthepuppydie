@@ -56,8 +56,9 @@ With every extra off, the campfire is numerically identical to before. A unit te
 - **Events alone never burn the camp:** event heat stops adding at 92. Heat surge and ember gust don't start above 70; rain and blizzards don't start below 30.
 - **Typing:** if the student is typing an answer, a new event waits (up to 45 seconds).
 - **The puppy:** at 0 hearts it shelters in the tent and recovers to 6, and it is never lost.
-- **The kettle:** the lid pop is comedic and resets the pressure. No damage, no repairs.
-- **Game over:** only *Puppy can lose* can end the campfire, and only through the heat, as before. The test always goes on.
+- **The kettle (rebalanced):** pressure builds 18 % faster than the original pace (Chill keeps the original pace). At full pressure an announced countdown starts (8 s, 12 s in Chill) with the valve still usable; if it runs out the kettle blows and the round ends through the same terminal state as freezing or burning (`Campfire.die("kettle")`). See [GOOSE_MODE.md](GOOSE_MODE.md#survival-rebalance).
+- **Oxygen:** if it actually reaches 0 (not just a meter that rounds to 0) the fire smothers and the round ends (`Campfire.die("oxygen")`), once. A "critical" warning comes first at 15 %.
+- **Game over:** with *Puppy can lose* on, a burnt camp, a frozen puppy, a kettle blowout or running out of oxygen shows the game-over dialog (one path for all four). Without it, each shows its recovery button (Thaw / Rebuild / Relight). The test always goes on and the mark is never affected.
 
 Typical frequency with everything on in a 60-minute test (simulated): about 10 disruptive events, 0.5 severe, 8 calm moments and 16 wind shifts.
 
@@ -92,7 +93,7 @@ The unit tests cover:
 - wind warning length
 - the hail warning, shelter, damage and recovery
 - the tent lock
-- the kettle pace, valve and lid pop
+- the kettle pace (central `TUNING` in js/companion.js), valve, countdown and blowout
 - oxygen
 - vent and wind direction effects
 - the event heat cap

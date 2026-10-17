@@ -50,6 +50,7 @@
     log.push({
       date: Date.now(), quiz: meta.id, source: meta.source || "quiz", level: meta.level || "normal", room: meta.room || undefined,
       qid: item.q.id, part: item.partKey || undefined, kind: item.kind, concepts: item.concepts,
+      sub: item.q.meta && item.q.meta.sub || undefined, family: item.q.meta && item.q.meta.family || undefined, mode: item.q.meta && item.q.meta.mode || undefined,
       correct: ans.correct, note: ans.note || undefined, blank: !!ans.blank,
       response: item.kind === "mc" ? undefined : String(ans.response || "").slice(0, 200),
       choice: item.kind === "mc" ? ans.choice : undefined,
@@ -82,7 +83,7 @@
     const q = item.q;
     let key = "";
     if (!ans.correct) {
-      if (item.kind === "nr") key = `<p class="fb-key"><span class="cmp-label">Answer</span> ${A.tex(String(q.answer))}</p>`;
+      if (item.kind === "nr") key = `<p class="fb-key"><span class="cmp-label">Answer</span> ${A.tex(q.ansTex || String(q.answer))}</p>`;
       if (item.kind === "wr") key = `<p class="fb-key"><span class="cmp-label">Answer</span> ${A.keyTeX(item.part)}</p>`;
     }
     const why = item.kind === "wr"
@@ -90,7 +91,8 @@
       : `<div class="quiz-why">${A.renderMath(q.e)}</div>`;
     const lesson = item.concepts[0];
     return `<div class="quiz-fb ${ans.correct ? "ok" : "bad"}" role="status">
-      <p class="fb-title"><b>${ans.correct ? "Correct." : ans.blank ? "No answer." : item.kind === "wr" && ans.earned > 0 ? "Partly right." : "Not quite."}</b>${ans.note ? ` <span class="fb-note">${A.esc(ans.note)}</span>` : ""}</p>
+      <p class="fb-title"><b>${ans.correct ? "Correct." : ans.blank ? "No answer." : item.kind === "wr" && ans.earned > 0 ? "Partly right." : "Not quite."}</b>${ans.note ? ` <span class="fb-note">${A.esc(window.I18N ? window.I18N.note(ans.note) : ans.note)}</span>` : ""}</p>
+      ${item.kind === "wr" && (item.part.kind === "plot" || item.part.kind === "graph") && !ans.correct ? `<div class="fb-plot">${A.answerTeX(ans.response, item.part.kind, item.part)}${A.keyTeX(item.part)}</div>` : ""}
       ${!ans.correct && item.kind === "mc" && q.why && q.why[ans.choice] ? `<p class="fb-note">Likely slip: ${A.renderMath(q.why[ans.choice])}</p>` : ""}
       ${key}${why}
       <div class="quiz-fb-actions">
@@ -103,7 +105,7 @@
   // ───────── a run ─────────
   // opts: { id, source, level, title, crumb, items, tutor, hint(item)→html, end(run)→html, onAct(act, run), onExit() }
   function run(container, opts) {
-    const r = { ...opts, container, i: 0, answers: [], checked: [], hintShown: [], id: opts.id || "run-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) };
+    const r = { ...opts, container, i: 0, answers: [], checked: [], hintShown: [], hintCount: [], id: opts.id || "run-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) };
     active = r;
     if (!container.dataset.prBound) bind(container);
     container._run = r;
@@ -131,6 +133,7 @@
       else if (act === "next" && r.waiting && r.waiting(r)) return;
       else if (act === "next") { r.i++; render(r); if (window.Tutor) window.Tutor.contextChanged(); }
       else if (act === "hint") { r.hintShown[r.i] = true; render(r); }
+      else if (act === "step") { r.hintCount[r.i] = (r.hintCount[r.i] || 0) + 1; render(r); }
       else if (act === "exit") { if (r.onExit) r.onExit(r); }
       else if (act === "explain") {
         const ans = r.answers[r.i] || {};
@@ -192,6 +195,7 @@
         </article>
         ${!checked && r.hint && !r.hintShown[r.i] ? `<button class="btn btn-quiet btn-sm pr-hint-btn" data-pr="hint" type="button">Show a hint</button>` : ""}
         ${!checked && r.hint && r.hintShown[r.i] ? `<div class="callout tip">${r.hint(it)}</div>` : ""}
+        ${!r.hint ? stepHints(r, it, checked) : ""}
         ${checked ? feedbackHTML(it, ans, { tutor: r.tutor }) : ""}
         <div class="quiz-nav">${checked && r.waiting && r.waiting(r)
           ? `<button class="btn btn-secondary" type="button" disabled>${A.esc(r.waiting(r))}</button>`
@@ -201,6 +205,23 @@
       </div>`;
     const inp = el.querySelector("#pr-nr, .wr-part input");
     if (inp) { if (inp.value) A.updatePreview(inp); if (!checked) inp.focus({ preventScroll: true }); }
+    if (it.kind === "wr" && (it.part.kind === "plot" || it.part.kind === "graph") && A.hydratePlots) {
+      A.hydratePlots(el, { [it.part.key]: ans ? ans.response || "" : "" }, (key, v) => {
+        r.answers[r.i] = v ? { response: v } : undefined;
+        const btn = el.querySelector('[data-pr="check"]'); if (btn) btn.disabled = !v || !/;p:/.test(v);
+      }, checked);
+    }
+  }
+  // generated questions carry step hints; how many show depends on the mode (simple/normal: all, challenge: one, nightmare: none)
+  function stepHints(r, it, checked) {
+    const hints = (it.q.hints || []).filter(Boolean);
+    const pol = r.hintPolicy || (hints.length ? "steps" : "none");
+    const allowed = pol === "none" ? 0 : pol === "one" ? Math.min(1, hints.length) : hints.length;
+    if (!allowed) return "";
+    const used = Math.min(r.hintCount[r.i] || 0, allowed);
+    const t = (k) => (A.tr ? A.tr(k) : k);
+    return `${used ? `<ol class="hint-list callout tip">${hints.slice(0, used).map((h) => `<li>${A.renderMath(h)}</li>`).join("")}</ol>` : ""}
+      ${!checked && used < allowed ? `<button class="btn btn-quiet btn-sm pr-hint-btn" data-pr="step" type="button">${used ? t("test.hintMore") : t("test.hint")} (${used}/${allowed})</button>` : ""}`;
   }
 
   function summary(r) {

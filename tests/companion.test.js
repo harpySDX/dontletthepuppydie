@@ -119,19 +119,88 @@ test("puppy in the tent locks the fire controls (logs, vent) until it comes out"
   assert.strictEqual(fire.pending.length, before + 1);
 });
 
-test("kettle: builds slowly, valve releases pressure and a little heat, ignoring it pops the lid harmlessly", () => {
+test("kettle: builds slowly, valve releases pressure and a little heat", () => {
   const fire = setup({ mech: { kettle: true } });
   fire.heat = 70;
   run(fire, 60, { play: false, onTick: (f) => { f.heat = 70; } });
-  assert.ok(fire.comp.s.pressure < 40, "slow build: " + fire.comp.s.pressure);
+  assert.ok(fire.comp.s.pressure < 45, "slow build: " + fire.comp.s.pressure);
   fire.comp.s.pressure = 90; const h = fire.heat;
   fire.comp.act("valve");
   assert.strictEqual(fire.comp.s.pressure, 65);
   assert.ok(fire.heat < h);
+});
+
+test("kettle pacing: 15–20 % faster than the original baseline in Normal; Chill keeps the original pace", () => {
+  const T = CP.TUNING.kettle, ORIGINAL = 0.006;
+  const speed = CP.kettleRate("normal") / ORIGINAL;
+  assert.ok(speed >= 1.15 && speed <= 1.2, "speedup " + speed);
+  assert.ok(Math.abs(CP.kettleRate("chill") - ORIGINAL) < 1e-12, "chill unchanged");
+  // measured through the real loop: same heat, 60 s
+  const climb = (mode) => { const f = setup({ mech: { kettle: true } }, { mode }); f.comp.s.pressure = 20; run(f, 60, { play: false, onTick: (x) => { x.heat = 75; } }); return f.comp.s.pressure - 20; };
+  const n = climb("normal"), c = climb("chill");
+  assert.ok(Math.abs(n / c - T.speedup) < 0.01, `normal ${n} vs chill ${c}`);
+  assert.ok(CP.blowSeconds("chill") > CP.blowSeconds("normal"));
+});
+
+test("kettle blowout is a real death, after an announced countdown, through the one terminal path", () => {
+  const fire = setup({ mech: { kettle: true } });
+  const events = []; fire.onEvent = (k) => events.push(k);
   fire.comp.s.pressure = 100;
-  run(fire, 6, { play: false, onTick: (f) => { f.heat = 80; } });
-  assert.strictEqual(fire.comp.s.lidPops, 1);
-  assert.ok(fire.comp.s.pressure < 50 && fire.status === "ok", "recovers, no damage");
+  run(fire, CP.blowSeconds("normal") - 1, { play: false, onTick: (f) => { if (f.status === "ok") f.heat = 80; } });
+  assert.strictEqual(fire.status, "ok", "not instant: still alive during the countdown");
+  assert.match(fire.comp.s.notice, /about to blow/);
+  run(fire, 2, { play: false, onTick: (f) => { if (f.status === "ok") f.heat = 80; } });
+  assert.strictEqual(fire.status, "kettle");
+  assert.deepStrictEqual(events, ["kettle"]);
+  assert.strictEqual(fire.stats.kettleDeaths, 1);
+  // terminal: nothing keeps running and nothing can kill again
+  const t = fire.comp.s.t, heat = fire.heat;
+  run(fire, 30, { play: false });
+  assert.strictEqual(fire.comp.s.t, t); assert.strictEqual(fire.heat, heat);
+  assert.strictEqual(fire.die("oxygen"), false);
+  assert.deepStrictEqual(events, ["kettle"]);
+  // recovery: Relight gives a safe kettle
+  fire.addFuel();
+  assert.strictEqual(fire.status, "ok");
+  assert.ok(fire.comp.s.pressure <= CP.TUNING.kettle.afterRecover && fire.comp.s.lidT === 0);
+});
+
+test("kettle: using the valve during the countdown saves the camp", () => {
+  const fire = setup({ mech: { kettle: true } });
+  fire.comp.s.pressure = 100;
+  run(fire, CP.blowSeconds("normal") - 2, { play: false, onTick: (f) => { f.heat = 80; } });
+  fire.comp.act("valve");
+  run(fire, 20, { play: false, onTick: (f) => { f.heat = 60; } });
+  assert.strictEqual(fire.status, "ok");
+  assert.strictEqual(fire.stats.kettleDeaths, 0);
+});
+
+test("oxygen running out is a death at the real threshold, once; a meter that reads 0 isn't enough", () => {
+  const fire = setup({ mech: { oxygen: true }, events: true, picked: ["whiteout"] });
+  const events = []; fire.onEvent = (k) => events.push(k);
+  fire.comp.s.major = { id: "whiteout", phase: "on", left: 999, dur: 999 };
+  fire.comp.s.nextWind = 1e9;
+  fire.comp.s.oxygen = 0.4; // displays as 0 %, but there is still air
+  fire.tick(0.1);
+  assert.strictEqual(fire.status, "ok");
+  assert.ok(fire.comp.s.oxygen > 0);
+  run(fire, 2, { play: false, onTick: (f) => { if (f.status === "ok") f.heat = 50; } });
+  assert.strictEqual(fire.status, "oxygen");
+  assert.deepStrictEqual(events, ["oxygen"]);
+  run(fire, 20, { play: false });
+  assert.deepStrictEqual(events, ["oxygen"], "no repeated deaths");
+  fire.revive();
+  assert.strictEqual(fire.status, "ok");
+  assert.ok(fire.comp.s.oxygen >= CP.TUNING.oxygen.afterRecover);
+});
+
+test("freezing and burning use the same terminal path (die) and fire onEvent once", () => {
+  const a = setup(undefined); const ea = []; a.onEvent = (k) => ea.push(k);
+  a.heat = 0.1; run(a, 2, { play: false });
+  assert.strictEqual(a.status, "frozen"); assert.deepStrictEqual(ea, ["frozen"]);
+  const b = setup(undefined); const eb = []; b.onEvent = (k) => eb.push(k);
+  b.heat = 99.9; b.pending.push({ left: 5 }); run(b, 6, { play: false });
+  assert.strictEqual(b.status, "burnt"); assert.deepStrictEqual(eb, ["burnt"]);
 });
 
 test("oxygen: steady normally (no clicking needed); storms thin it; low oxygen weakens logs", () => {

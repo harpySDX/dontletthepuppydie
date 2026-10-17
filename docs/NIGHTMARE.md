@@ -1,5 +1,11 @@
 # Nightmare mode
 
+> **Current version:** Nightmare is now a single mode on quadratic functions: a five-stage gauntlet built around one generated function (stages `nm1`–`nm5` in `js/quad-bank.js`), no hints, exact answers only, about as hard as the old tier III. It is chosen from the Home carousel like any other mode. See [`REDESIGN.md`](REDESIGN.md).
+>
+> The three radicals tiers described below are **retired**. Their generator (`js/nightmare.js`) stays so that saved tests and history from that release still rebuild and display (`nm-` ids, levels `nightmare1`–`nightmare3`).
+
+## The retired radicals tiers
+
 Nightmare is a parent level next to Tim's Test, Normal and Challenge. It has three tiers, and you have to pick one:
 
 | Tier | Level key | What it adds |

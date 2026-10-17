@@ -30,7 +30,10 @@
   const C = () => window.Concepts;
   const G = () => window.Group;
   const norm = (code) => G().normalize(code);
-  const conceptsOf = (mask) => C().CONCEPTS.filter((_, i) => mask & (1 << i)).map((c) => c.id);
+  // the concept list a room's mask indexes: quadratics rooms use the quadratics unit, older rooms the original concepts
+  const listFor = (subject) => (subject === "quad" ? C().CONCEPTS.filter((c) => c.unit === "quadratics") : C().CONCEPTS.filter((c) => c.unit !== "quadratics"));
+  const subjectOf = (id) => (C().get(id) && C().get(id).unit === "quadratics" ? "quad" : "pc11");
+  const conceptsOf = (mask, subject) => listFor(subject).filter((_, i) => mask & (1 << i)).map((c) => c.id);
 
   // ───────── create ─────────
   const form = { concepts: new Set(), count: 8, synced: false, pace: 90, startIn: 2, hints: true };
@@ -42,19 +45,21 @@
     A.$("#room-dialog").showModal();
   }
   function renderForm() {
-    A.$("#room-concepts").innerHTML = C().UNITS.map((u) => `<fieldset class="rc-unit"><legend>${A.esc(u.title)}</legend>${C().CONCEPTS.filter((c) => c.unit === u.id).map((c) => `<label class="check"><input type="checkbox" data-rc="${c.id}" ${form.concepts.has(c.id) ? "checked" : ""}/> ${A.esc(c.title)}</label>`).join("")}</fieldset>`).join("");
+    // a room covers one subject: quadratics, or the earlier units
+    const sub = form.concepts.size ? subjectOf([...form.concepts][0]) : null;
+    A.$("#room-concepts").innerHTML = C().UNITS.map((u) => `<fieldset class="rc-unit"><legend>${A.esc(u.title)}</legend>${C().CONCEPTS.filter((c) => c.unit === u.id).map((c) => { const off = sub && subjectOf(c.id) !== sub; return `<label class="check${off ? " off" : ""}"><input type="checkbox" data-rc="${c.id}" ${form.concepts.has(c.id) ? "checked" : ""} ${off ? 'disabled title="A room covers either Quadratic Functions or the earlier units"' : ""}/> ${A.esc(c.title)}</label>`; }).join("")}</fieldset>`).join("");
     const seg = (id, attr, val) => { for (const b of A.$$(`#${id} button`)) { const on = b.dataset[attr] === String(val); b.classList.toggle("active", on); b.setAttribute("aria-checked", String(on)); } };
     seg("rc-count", "count", form.count); seg("rc-pace-mode", "mode", form.synced ? "synced" : "self"); seg("rc-pace", "pace", form.pace); seg("rc-start", "start", form.startIn);
     A.$("#rc-synced-opts").hidden = !form.synced;
     A.$("#rc-hints").checked = form.hints;
-    const n = poolFor([...form.concepts]).length;
+    const n = poolSize([...form.concepts]);
     A.$("#rc-note").textContent = !form.concepts.size ? "Pick at least one concept." : n < form.count ? `Only ${n} question${n === 1 ? "" : "s"} exist for these concepts, so the room will have ${n}.` : `${form.count} questions from ${form.concepts.size} concept${form.concepts.size === 1 ? "" : "s"}.`;
     A.$("#rc-go").disabled = !form.concepts.size || !n;
   }
   function onFormClick(e) {
     const t = e.target;
     const rc = t.closest("[data-rc]");
-    if (rc) { if (rc.checked) form.concepts.add(rc.dataset.rc); else form.concepts.delete(rc.dataset.rc); return renderForm(); }
+    if (rc) { if (rc.checked) { const sub = subjectOf(rc.dataset.rc); for (const id of [...form.concepts]) if (subjectOf(id) !== sub) form.concepts.delete(id); form.concepts.add(rc.dataset.rc); } else form.concepts.delete(rc.dataset.rc); return renderForm(); }
     const b = t.closest("button[data-count], button[data-mode], button[data-pace], button[data-start]");
     if (b) {
       if (b.dataset.count) form.count = Number(b.dataset.count);
@@ -66,15 +71,18 @@
     if (t.id === "rc-hints") { form.hints = t.checked; return; }
     if (t.id === "rc-weak") {
       const L = A.learningState();
-      form.concepts = new Set(L.recs.filter((x) => ["needs_work", "early_warning", "developing", "review_due"].includes(x.status)).slice(0, 4).map((x) => x.concept));
+      const weak = L.recs.filter((x) => ["needs_work", "early_warning", "developing", "review_due"].includes(x.status));
+      const sub = weak.length ? subjectOf(weak[0].concept) : "quad";
+      form.concepts = new Set(weak.filter((x) => subjectOf(x.concept) === sub).slice(0, 4).map((x) => x.concept));
       return renderForm();
     }
   }
   function create() {
     if (!form.concepts.size) return;
-    const mask = C().CONCEPTS.reduce((m, c, i) => (form.concepts.has(c.id) ? m | (1 << i) : m), 0);
+    const subject = subjectOf([...form.concepts][0]);
+    const mask = listFor(subject).reduce((m, c, i) => (form.concepts.has(c.id) ? m | (1 << i) : m), 0);
     const start = form.synced ? Math.ceil((Date.now() + form.startIn * 60000) / 60000) * 60000 : 0;
-    const code = G().encodeRoom({ concepts: mask, count: form.count, synced: form.synced, pace: form.pace, hints: form.hints, seed: Math.floor(Math.random() * 0x7ffff), start });
+    const code = G().encodeRoom({ concepts: mask, count: form.count, synced: form.synced, pace: form.pace, hints: form.hints, seed: Math.floor(Math.random() * 0x7ffff), start, subject });
     const name = A.$("#room-name-in").value.trim().slice(0, 18);
     if (name) A.store.set(A.KEYS.prefs, { ...A.store.get(A.KEYS.prefs, {}), name });
     A.$("#room-dialog").close();
@@ -86,9 +94,21 @@
     const tagged = (q) => C().conceptsFor(q).some((c) => ids.includes(c));
     return [...A.MC().filter(tagged).map((q) => ["mc", q]), ...A.NR().filter(tagged).map((q) => ["nr", q])].sort((a, b) => (a[1].id < b[1].id ? -1 : 1));
   }
+  // generated quadratics questions are endless, so a quadratics room always has its full count
+  function poolSize(ids) { return ids.length && subjectOf(ids[0]) === "quad" ? 99 : poolFor(ids).length; }
   function buildItems(r) {
     const rnd = G().rng(r.seed);
-    const pick = A.shuffle(poolFor(conceptsOf(r.mask)), rnd).slice(0, r.count);
+    const ids = conceptsOf(r.mask, r.subject);
+    if (r.subject === "quad" && window.QuadBank) {
+      // the same seed → the same generated questions on every device
+      const out = [];
+      for (let k = 0; out.length < r.count && k < r.count * 3; k++) {
+        const got = window.QuadBank.practicePool(ids[k % ids.length], "normal", 1, rnd, { kinds: ["mc", "nr"] })[0];
+        if (got) { const [kind, q] = got; A.BANKS[kind].set(q.id, q); out.push(window.Practice.makeItem(kind, q, undefined, kind === "mc" ? { order: q.order ? q.order.slice() : A.shuffle(q.c.map((_, i) => i), rnd) } : {})); }
+      }
+      return out;
+    }
+    const pick = A.shuffle(poolFor(ids), rnd).slice(0, r.count);
     return pick.map(([k, q]) => window.Practice.makeItem(k, q, undefined, k === "mc" ? { order: A.shuffle(q.c.map((_, i) => i), rnd) } : {}));
   }
 
@@ -125,7 +145,7 @@
   function render() {
     const st = state();
     const el = A.$("#room-main");
-    const ids = conceptsOf(room.mask);
+    const ids = conceptsOf(room.mask, room.subject);
     A.$("#room-code").textContent = room.code;
     A.$("#room-meta").innerHTML = [
       `${room.items.length} questions`,
@@ -295,8 +315,8 @@
     const pc = window.Practice.context();
     return {
       type: "study_room", title: `Study room (${room.synced ? "together" : "self-paced"})`,
-      text: `Shared practice set on: ${conceptsOf(room.mask).map((id) => C().get(id).title).join(", ")}. Hints and tutoring are allowed in this room. Other students' answers are not available.`,
-      concepts: conceptsOf(room.mask), focus: pc ? pc.focus : undefined,
+      text: `Shared practice set on: ${conceptsOf(room.mask, room.subject).map((id) => C().get(id).title).join(", ")}. Hints and tutoring are allowed in this room. Other students' answers are not available.`,
+      concepts: conceptsOf(room.mask, room.subject), focus: pc ? pc.focus : undefined,
     };
   }
 
