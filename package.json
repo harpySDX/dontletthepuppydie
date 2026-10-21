@@ -7,5 +7,8 @@
     "dev": "node tests/e2e/devserver.js",
     "test:e2e": "node tests/e2e/browser.js && node tests/e2e/regressions.js && node tests/e2e/redesign.js && node tests/e2e/onboarding.js && node tests/e2e/curriculum.js && node tests/e2e/studioplus.js && node tests/e2e/goose.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@vercel/analytics": "^1.4.1"
+  }
 }
