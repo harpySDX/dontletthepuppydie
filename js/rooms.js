@@ -103,7 +103,9 @@
       // the same seed → the same generated questions on every device
       const out = [];
       for (let k = 0; out.length < r.count && k < r.count * 3; k++) {
-        const got = window.QuadBank.practicePool(ids[k % ids.length], "normal", 1, rnd, { kinds: ["mc", "nr"] })[0];
+        let got = window.QuadBank.practicePool(ids[k % ids.length], "normal", 1, rnd, { kinds: ["mc", "nr"] })[0];
+        // concepts whose questions live only in the shared registry (e.g. horizontal stretches) — same seed, same question
+        if (!got && window.Bank) { const it = window.Bank.select({ concept: ids[k % ids.length], mode: "normal", n: 1, kinds: ["mc"], rnd, record: false }).items[0]; if (it) got = [it.kind, it.q]; }
         if (got) { const [kind, q] = got; A.BANKS[kind].set(q.id, q); out.push(window.Practice.makeItem(kind, q, undefined, kind === "mc" ? { order: q.order ? q.order.slice() : A.shuffle(q.c.map((_, i) => i), rnd) } : {})); }
       }
       return out;

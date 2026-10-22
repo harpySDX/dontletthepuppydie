@@ -202,7 +202,7 @@ async function nav(where) {
   await page.click('#mode-track [data-mode="normal"]'); await page.waitForTimeout(200);
   await page.click("#btn-start"); await page.waitForTimeout(600);
   ok("Test running: tutor and nav hidden", !(await visible(page, "#tutor")) && !(await visible(page, "#main-nav")));
-  ok("Normal test: 20 quadratics questions in 3 sections", (await page.locator("#nav-grid .nav-cell").count()) === 20 && (await page.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2")).items.every((i) => /^qd-/.test(i.qid)))));
+  ok("Normal test: 20 quadratics questions in 3 sections", (await page.locator("#nav-grid .nav-cell").count()) === 20 && (await page.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2")).items.every((i) => /^qd-|^cb-1-ft_/.test(i.qid))))); // ft_ = quadratic transformations
   await page.evaluate(() => { location.hash = "#c-radicals.simplify"; }); await page.waitForTimeout(300);
   ok("Test running: deep link can't leave the test", await visible(page, "#screen-test"));
   await page.click("#btn-pause"); await page.waitForTimeout(250);

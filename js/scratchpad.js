@@ -20,13 +20,24 @@
   const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } };
   const savePrefs = (p) => { try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* ignore */ } };
 
+  // "Pencil" is drawn in the theme's paper ink, so it stays readable on dark paper (saved strokes keep the hex as an id)
+  let pencilInk = null;
+  const inkOf = (c) => {
+    if (c !== COLORS[0].c) return c;
+    if (!pencilInk) { try { pencilInk = getComputedStyle(document.documentElement).getPropertyValue("--paper-ink").trim() || c; } catch { pencilInk = c; } }
+    return pencilInk;
+  };
+  const pads = new Set();
+  document.addEventListener("theme:change", () => { pencilInk = null; requestAnimationFrame(() => { for (const sp of pads) try { sp.redraw(); } catch { /* detached */ } }); });
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { pencilInk = null; for (const sp of pads) try { sp.redraw(); } catch { /* detached */ } }); } catch { /* old browsers */ }
+
   function drawStroke(ctx, s) {
     const p = s.p;
     if (!p || p.length < 2) return;
     ctx.save();
     ctx.globalCompositeOperation = s.e ? "destination-out" : "source-over";
-    ctx.strokeStyle = s.c;
-    ctx.fillStyle = s.c;
+    ctx.strokeStyle = inkOf(s.c);
+    ctx.fillStyle = inkOf(s.c);
     ctx.lineWidth = s.w;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -51,6 +62,7 @@
   class Scratchpad {
     constructor(root) {
       this.root = root;
+      pads.add(this);
       this.canvas = root.querySelector(".sp-canvas");
       this.ctx = this.canvas.getContext("2d");
       this.surface = root.querySelector(".sp-surface");
@@ -143,7 +155,7 @@
       bar.innerHTML = `
         <span class="sp-modes" role="group" aria-label="Scratchpad mode"><button type="button" data-mode="draw" class="active" aria-pressed="true">${t("pad.draw", "Draw")}</button><button type="button" data-mode="type" aria-pressed="false">${t("pad.type", "Type")}</button></span>
         <span class="sp-sep"></span>
-        ${COLORS.map((c, i) => `<button type="button" class="sp-color${i === 0 ? " active" : ""}" data-color="${c.c}" title="${c.name}" aria-label="${c.name}" style="--swatch:${c.c}"></button>`).join("")}
+        ${COLORS.map((c, i) => `<button type="button" class="sp-color${i === 0 ? " active" : ""}" data-color="${c.c}" title="${c.name}" aria-label="${c.name}" style="--swatch:${i === 0 ? "var(--paper-ink)" : c.c}"></button>`).join("")}
         <span class="sp-sep"></span>
         ${SIZES.map((s, i) => `<button type="button" class="sp-size${i === 0 ? " active" : ""}" data-size="${s}" title="${["Fine", "Medium", "Thick"][i]} line" aria-label="${["Fine", "Medium", "Thick"][i]} line"><i style="width:${s + 2}px;height:${s + 2}px"></i></button>`).join("")}
         <span class="sp-sep"></span>

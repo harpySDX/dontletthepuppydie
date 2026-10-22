@@ -314,6 +314,8 @@
     if (root.QuadCheck && root.QuadCheck.handles(spec.kind)) return root.QuadCheck.grade(spec, response);
     // curriculum-wide kinds (polynomials/rational expressions, exponent expressions, intervals, decimals, built graphs)
     if (root.AnswerCheck && root.AnswerCheck.handles(spec.kind)) return root.AnswerCheck.grade(spec, response);
+    // physics: quantities with units, option choices, ordered steps (js/physics/check.js)
+    if (root.PhysCheck && root.PhysCheck.handles(spec.kind)) return root.PhysCheck.grade(spec, response);
     const max = spec.marks || 1;
     const blank = response === undefined || response === null || String(response).trim() === "";
     if (blank) return { earned: 0, max, verdict: "blank", note: "No answer." };

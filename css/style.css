@@ -271,7 +271,7 @@ body.buddy-off .buddy-panel, body.buddy-off .heat-panel, body.buddy-off .kbd-hin
   flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
   font-weight: 800; background: #f1e7d4; color: #6b5a40;
 }
-.choice.selected .choice-letter { background: var(--ember); color: #fff; }
+.choice.selected .choice-letter { background: var(--ember); color: var(--ember-ink); }
 .choice-body { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; font-size: 1.05rem; }
 .choice-body .katex { font-size: 1.1em; }
 
@@ -598,7 +598,7 @@ body.buddy-off .buddy-panel, body.buddy-off .heat-panel, body.buddy-off .kbd-hin
 .preview.err { color: #b4432c; font-weight: 700; font-size: 0.85rem; }
 .paper-seg { background: #f3ead8; border-color: #e0d2b6; }
 .paper-seg button { color: var(--paper-muted); padding: 8px 18px; }
-.paper-seg button.active { background: var(--ember); color: #fff; box-shadow: none; }
+.paper-seg button.active { background: var(--ember); color: var(--ember-ink); box-shadow: none; }
 .work-box { margin-top: 14px; border-radius: 12px; background: #f7efdf; padding: 10px 14px; }
 .work-box summary { cursor: pointer; font-weight: 800; color: #6b4a1e; }
 .work-input {
@@ -1307,7 +1307,7 @@ body[data-screen="test"] .topbar {
 .ex-steps { list-style: none; counter-reset: step; margin: 0; padding: 0 16px 4px; }
 .ex-steps li { counter-increment: step; display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line-soft); line-height: 1.75; overflow-x: auto; }
 .ex-steps li::before { content: counter(step); width: 22px; height: 22px; margin-top: 3px; border-radius: 50%; display: grid; place-items: center; background: var(--sunken); border: 1px solid var(--line); font-size: 0.72rem; font-weight: 650; color: var(--muted); }
-.ex-answer { margin: 6px 16px 16px; padding: 10px 14px; border-radius: 10px; background: var(--good-soft); border: 1px solid rgba(111, 203, 152, 0.22); }
+.ex-answer { margin: 6px 16px 16px; padding: 10px 14px; border-radius: 10px; background: var(--good-soft); border: 1px solid color-mix(in srgb, var(--good) 24%, transparent); }
 .mistakes { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .mistakes li { display: grid; gap: 4px; margin: 0; }
 .mk-wrong { color: #f2c0c0; } .mk-fix { color: #b6e6cb; }

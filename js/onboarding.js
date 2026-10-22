@@ -71,8 +71,15 @@
       { id: "done", essential: true, title: "site.done.t", body: "site.done.b", nextLabel: "site.done.go", onEnter: home },
     ];
   }
+  // the tours walk through the Math app: from Physics, switch to Math first (which asks if a run is open)
+  function viaMath(fn, opts) {
+    if (!A || !A.getSubject || A.getSubject() !== "physics") return false;
+    A.switchSubject("math").then(() => { if (A.getSubject() === "math") fn(opts); });
+    return true;
+  }
   function startSite(opts = {}) {
     if (!A || A.inLiveTest()) return false;
+    if (viaMath(startSite, opts)) return true;
     const variant = opts.variant || "full";
     let steps = siteSteps();
     if (variant === "essentials") steps = steps.filter((s) => s.essential);
@@ -130,6 +137,7 @@
   }
   function startTest(opts = {}) {
     if (!A || A.inLiveTest()) return false;
+    if (viaMath(startTest, opts)) return true;
     const origin = document.body.dataset.screen && document.body.dataset.screen !== "start" ? document.body.dataset.screen : "home";
     A.setSettings(false); A.setIsland(false);
     const d = A.demo.start();

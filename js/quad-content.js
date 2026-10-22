@@ -425,6 +425,34 @@
         zh: { title: "最值应用题", summary: "在实际问题中，顶点回答“最多多少”和“何时”：k 是最值，h 是取得最值的位置。" },
       },
     }),
+    C({
+      id: "quad.hscale", unit: "quadratics", title: "Horizontal stretches and compressions",
+      summary: R`In \(y = (bx)^2\) the factor acts on \(x\): the graph is scaled horizontally by \(\frac{1}{b}\). \(y = (2x)^2\) is not \(y = 2x^2\).`,
+      keywords: ["horizontal stretch", "horizontal compression", "f(bx)", "(2x)^2", "inside the bracket", "reciprocal", "order of transformations"],
+      intuition: "A number inside the bracket changes x before it is squared, so the graph reaches every height sooner (b > 1) or later (b < 1). That is why the effect feels backwards: (2x)² squeezes the graph toward the y-axis by a factor of 1/2.",
+      explanation: [
+        R`<b>Horizontal scaling.</b> \(y = (bx)^2\) divides every x-value of \(y = x^2\) by \(b\). If \(b > 1\) it is a horizontal <b>compression</b> by a factor of \(\frac{1}{b}\); if \(0 < b < 1\) it is a horizontal <b>stretch</b> by a factor of \(\frac{1}{b}\).`,
+        R`<b>Not the same as a vertical factor.</b> \(y = 2x^2\) multiplies y-values by 2 (vertical stretch by 2). \(y = (2x)^2 = 4x^2\) halves x-values (horizontal compression by \(\frac{1}{2}\)), which happens to give the same graph as a vertical stretch by 4 — never by 2.`,
+        R`<b>Points.</b> Under \(y = (bx)^2\), a point \((x, y)\) of \(y = x^2\) moves to \(\left(\frac{x}{b},\ y\right)\). Under \(y = ax^2\) it moves to \((x,\ ay)\).`,
+        R`<b>All together.</b> \(y = a\left(b(x - h)\right)^2 + k\): horizontal scaling \(\frac{1}{b}\), vertical scaling \(|a|\) (reflection if \(a < 0\)), then translate \(h\) horizontally and \(k\) vertically. Convention: stretches, compressions and reflections first, then translations. Any point \((x, y)\) on \(y = x^2\) ends at \(\left(\frac{x}{b} + h,\ ay + k\right)\).`,
+        R`<b>Vertex form.</b> Because \(\left(b(x - h)\right)^2 = b^2(x - h)^2\), the same graph is \(y = ab^2(x - h)^2 + k\). The vertex \((h, k)\) doesn't move under the scalings.`,
+      ],
+      rules: [{ name: "Horizontal factor", tex: R`y = (bx)^2:\ \text{scale } x \text{ by } \tfrac{1}{b}` }, { name: "Same graph", tex: R`(bx)^2 = b^2x^2` }, { name: "Mapping", tex: R`(x, y) \to \left(\tfrac{x}{b} + h,\ ay + k\right)` }],
+      examples: [
+        { title: R`Compare \(y = (2x)^2\) and \(y = 2x^2\)`, steps: [R`\((2x)^2 = 4x^2\): coefficient 4.`, R`\(y = 2x^2\) has coefficient 2, so \(y = (2x)^2\) is narrower.`], answer: "Different graphs; (2x)² is narrower" },
+        { title: R`Describe \(y = -3\left(\frac{1}{2}(x - 1)\right)^2 + 4\)`, steps: [R`Inside: \(\frac{1}{2}\) → horizontal stretch by 2; \(h = 1\) → 1 right.`, R`Outside: \(-3\) → vertical stretch by 3 and reflection in the x-axis; \(k = 4\) → 4 up.`, R`Vertex form: \(-3 \cdot \frac{1}{4} = -\frac{3}{4}\), so \(y = -\frac{3}{4}(x - 1)^2 + 4\).`], answer: "Stretch horizontally by 2, vertically by 3, reflect, then 1 right and 4 up" },
+      ],
+      mistakes: [{ wrong: "Calling y = (2x)² a horizontal stretch by 2.", fix: "Inside factors are reciprocated: (2x)² compresses horizontally by 1/2." }, { wrong: "Treating (2x)² as 2x².", fix: "Square the whole bracket: (2x)² = 4x²." }, { wrong: "Moving the vertex when scaling.", fix: "Stretches about the axis keep the vertex (h, k) fixed." }],
+      strategies: ["Track x-values for inside changes and y-values for outside changes.", "Rewrite in vertex form to compare widths: a·b² is the vertical factor."],
+      graph: { fns: [{ a: 1, h: 0, k: 0 }, { a: 4, h: 0, k: 0 }, { a: 2, h: 0, k: 0 }], labels: ["y = x²", "y = (2x)² = 4x²", "y = 2x²"], styles: ["dashed", "", "alt"], marks: { vertex: true }, window: { x0: -4, x1: 4, y0: -1, y1: 9 } },
+      prereqs: ["quad.transform"], related: ["quad.transform", "quad.vertex_form", "quad.direction"], difficulty: 3,
+      tr: {
+        fr: { title: "Étirements et compressions horizontaux", summary: "Dans y = (bx)², le facteur agit sur x : échelle horizontale 1/b. y = (2x)² n'est pas y = 2x²." },
+        es: { title: "Estiramientos y compresiones horizontales", summary: "En y = (bx)², el factor actúa sobre x: escala horizontal 1/b. y = (2x)² no es y = 2x²." },
+        de: { title: "Horizontale Streckungen und Stauchungen", summary: "In y = (bx)² wirkt der Faktor auf x: horizontale Skalierung 1/b. y = (2x)² ist nicht y = 2x²." },
+        zh: { title: "水平伸缩", summary: "在 y = (bx)² 中，系数作用于 x：水平方向缩放为 1/b。y = (2x)² 与 y = 2x² 不同。" },
+      },
+    }),
   ];
 
   // ───────── formula reference ─────────

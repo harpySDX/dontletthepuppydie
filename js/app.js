@@ -58,8 +58,8 @@
   }
   const LEVELS = {
     simple: { label: "Simple", short: "Simple", practice: true, hint: "Guided practice: one skill at a time with step-by-step hints and instant feedback. Not timed." },
-    normal: { label: "Normal", short: "Normal", hint: "Unit-test level: 34 marks laid out like the real test, fresh verified questions every time. Hints are there if you ask (they're noted in your review)." },
-    challenge: { label: "Challenging", short: "Challenging", hint: "Harder than the unit test: fractions, disguised forms, traps and combined skills. One strategy hint per question." },
+    normal: { label: "Normal", short: "Normal", hint: "Unit-test level: 34 marks laid out like the real test, fresh verified questions every time. Hints are off unless you allow them in Test options (any you use are noted in your review)." },
+    challenge: { label: "Challenging", short: "Challenging", hint: "Harder than the unit test: fractions, disguised forms, traps and combined skills. At most one strategy hint per question, and only if you allow hints." },
     nightmare: { label: "Nightmare", short: "Nightmare", hint: "One connected gauntlet: five stages about a single function. No hints, exact answers only." },
     // retired levels, kept so earlier history still displays (radicals unit)
     classmate: { label: "Tim's Test (radicals, retired)", short: "Tim's", legacy: true, hint: "" },
@@ -144,10 +144,65 @@
   let viewing = null, reviewFilter = "all";
   let pad = null;
 
+  // ───────── subjects: Pre-Calculus 11 (math) and Physics 11 share the shell; their learning data never mixes ─────────
+  const SUBJECT_KEY = "campfire-prep.subject.v1";
+  const getSubject = () => (store.get(SUBJECT_KEY, "math") === "physics" ? "physics" : "math");
+  function applySubject() {
+    const sub = getSubject();
+    document.body.dataset.subject = sub;
+    const btn = $("#subject-btn");
+    if (btn) { btn.querySelector(".subj-name").textContent = tr(sub === "physics" ? "subject.physics.short" : "subject.math.short"); btn.setAttribute("aria-label", tr("subject.switch", { s: tr("subject." + sub) })); btn.dataset.subject = sub; }
+    for (const o of $$("#subject-menu [data-subject]")) { const on = o.dataset.subject === sub; o.setAttribute("aria-checked", String(on)); o.classList.toggle("active", on); }
+    // the 4th island destination is the Study Room in Math and the Physics Lab in Physics
+    const room = $('#main-nav [data-go="studyroom"] span[data-i18n]');
+    if (room) { room.dataset.i18n = sub === "physics" ? "ph.nav.lab" : "nav.room"; room.textContent = tr(room.dataset.i18n); }
+    const lib = $('#main-nav [data-go="library"] span[data-i18n]');
+    if (lib) { lib.dataset.i18n = sub === "physics" ? "ph.nav.learn" : "nav.concepts"; lib.textContent = tr(lib.dataset.i18n); }
+    // Quick actions on the shared home: same four buttons, each subject's destinations
+    const QK = { practice: "practice", studyroom: "room", library: "library", progress: "progress" };
+    for (const [go, key] of Object.entries(QK)) {
+      const b = $(`#dash .quick-item[data-go="${go}"]`); if (!b) continue;
+      const base = sub === "physics" ? "ph.quick." + { practice: "practice", room: "lab", library: "learn", progress: "progress" }[key] : "quick." + key;
+      const t = b.querySelector(".qi-t b"), d = b.querySelector(".qi-t small");
+      if (t) { t.dataset.i18n = base; t.textContent = tr(base); }
+      if (d) { d.dataset.i18n = base + ".d"; d.textContent = tr(base + ".d"); }
+    }
+  }
+  function setSubjectMenu(open) {
+    const m = $("#subject-menu"), b = $("#subject-btn"); if (!m || !b) return;
+    m.hidden = !open; b.setAttribute("aria-expanded", String(open));
+    if (open) { const a = m.querySelector('[aria-checked="true"]') || m.querySelector("button"); if (a) a.focus(); }
+  }
+  // Switching never silently discards work: an open practice run asks first; a saved Math test stays saved.
+  async function switchSubject(to) {
+    setSubjectMenu(false);
+    if (to === getSubject()) return;
+    const mathRun = !$("#prac-run").hidden && document.body.dataset.screen === "practice";
+    const physRun = window.PhysUI && window.PhysUI.runActive;
+    if ((mathRun || physRun) && !(await confirmDialog(tr("subject.leaveTitle"), esc(tr("subject.leaveBody")), tr("subject.leaveOk"), tr("subject.stay")))) return;
+    if (physRun) window.PhysUI.stopRun();
+    store.set(SUBJECT_KEY, to);
+    applySubject();
+    if (document.body.dataset.screen === "start") return;
+    goHome();
+    if (to === "math" && savedSession()) toast(tr("subject.testSaved"));
+  }
+  function toast(text) {
+    let t = $("#app-toast");
+    if (!t) { t = document.createElement("div"); t.id = "app-toast"; t.className = "app-toast"; t.setAttribute("role", "status"); t.setAttribute("aria-live", "polite"); document.body.appendChild(t); }
+    t.textContent = text; t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 4200);
+  }
+  function markNav(go, ctxText) {
+    for (const b of $$("#main-nav button")) { const on = b.dataset.go === go; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); }
+    if (ctxText) $("#island-ctx").textContent = ctxText;
+  }
+
   // which island item a screen belongs to, and the short label the collapsed island shows
   const NAV_OF = { home: "home", results: "home", practice: "practice", course: "practice", review: "practice", learning: "practice", progress: "practice", library: "library", studyroom: "studyroom", room: "studyroom", lobby: "studyroom" };
   const CTX_KEY = { home: "nav.home", practice: "nav.practice", course: "prac.tab.course", review: "prac.tab.review", learning: "prac.tab.plan", progress: "prac.tab.progress", library: "nav.concepts", studyroom: "nav.room", room: "nav.room", lobby: "nav.lobby", results: "nav.results", test: "nav.test", start: "nav.title" };
   function show(name) {
+    if (name !== "phys" && window.PhysUI && document.body.dataset.screen === "phys") window.PhysUI.leave();
     for (const s of $$(".screen")) s.hidden = s.id !== `screen-${name}`;
     $("#topbar-test").hidden = name !== "test";
     const isl = $("#island");
@@ -200,7 +255,13 @@
   }
 
   // ───────── Settings: language, layout, theme (saved on this device) ─────────
-  const LAYOUTS = ["balanced", "focus", "studio", "studioplus"], THEMES = ["light", "dark", "system"];
+  const LAYOUTS = ["balanced", "focus", "studio", "studioplus"];
+  // themes: tokens live in css/glass.css (Light/Dark Glass, System) and css/themes.css (generated by tools/themes.js).
+  // Seasonal themes are ordinary choices — nothing ever switches to them by date.
+  const THEME_TONE = { light: "light", dark: "dark", cinnamon: "light", blush: "light", galaxy: "dark", arctic: "light", beach: "light", halloween: "dark", christmas: "dark", graphite: "dark", lime: "light" };
+  const THEMES = ["light", "dark", "system", "cinnamon", "blush", "galaxy", "arctic", "beach", "halloween", "christmas", "graphite", "lime"];
+  const SEASONAL = new Set(["halloween", "christmas"]);
+  const toneOf = (th) => (th === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : THEME_TONE[th] || "light");
   const getUI = () => { const u = store.get(KEYS.ui, {}); return { lang: (window.I18N && window.I18N.LANGS.some((l) => l.id === u.lang)) ? u.lang : "en", layout: LAYOUTS.includes(u.layout) ? u.layout : "balanced", theme: THEMES.includes(u.theme) ? u.theme : "light" }; };
   function applyUI(change) {
     const u = { ...getUI(), ...(change || {}) };
@@ -208,9 +269,11 @@
     if (change) store.set(KEYS.ui, { ...store.get(KEYS.ui, {}), ...u });
     const d = document.documentElement;
     d.dataset.theme = u.theme;
+    d.dataset.tone = toneOf(u.theme);
     d.dataset.layout = u.layout;
     const meta = document.querySelector('meta[name="color-scheme"]');
-    if (meta) meta.content = u.theme === "dark" ? "dark" : u.theme === "light" ? "light" : "light dark";
+    if (meta) meta.content = u.theme === "system" ? "light dark" : d.dataset.tone;
+    if (change && change.theme) document.dispatchEvent(new CustomEvent("theme:change", { detail: { theme: u.theme, tone: d.dataset.tone } }));
     if (window.I18N && window.I18N.lang !== u.lang) window.I18N.set(u.lang);
     renderSettings();
     return u;
@@ -227,8 +290,14 @@
     if (!$("#set-lang") || !window.I18N) return;
     $("#set-lang").innerHTML = window.I18N.LANGS.map((l) => `<button type="button" role="radio" aria-checked="${u.lang === l.id}" class="${u.lang === l.id ? "active" : ""}" data-lang="${l.id}" lang="${l.html}">${esc(l.native)}</button>`).join("");
     $("#set-layout").innerHTML = LAYOUTS.map((l) => `<button type="button" role="radio" aria-checked="${u.layout === l}" class="layout-opt${u.layout === l ? " active" : ""}" data-layout="${l}">${LAYOUT_ICON[l]}<span class="lo-t"><b>${esc(tr("layout." + l))}</b><small>${esc(tr("layout." + l + ".d"))}</small></span></button>`).join("");
-    $("#set-theme").innerHTML = THEMES.map((th) => `<button type="button" role="radio" aria-checked="${u.theme === th}" class="theme-opt th-${th}${u.theme === th ? " active" : ""}" data-theme-opt="${th}"><span class="th-swatch" aria-hidden="true"></span>${esc(tr("theme." + th))}</button>`).join("");
+    // each card previews its own palette (a mini page: background, a card with text, an accent button) plus swatches
+    $("#set-theme").innerHTML = THEMES.map((th) => `<button type="button" role="radio" aria-checked="${u.theme === th}" class="theme-opt th-card th-${th}${u.theme === th ? " active" : ""}" data-theme-opt="${th}" title="${esc(tr("theme." + th + ".d"))}">
+      <span class="th-prev" aria-hidden="true"><span class="th-pv-card"><span class="th-pv-l1"></span><span class="th-pv-l2"></span><span class="th-pv-btn"></span></span></span>
+      <span class="th-name">${esc(tr("theme." + th))}${SEASONAL.has(th) ? ` <small class="th-tag">${esc(tr("theme.seasonal"))}</small>` : ""}</span>
+      <span class="th-dots" aria-hidden="true"><i style="background:var(--pv-accent)"></i><i style="background:var(--pv-second)"></i><i style="background:var(--pv-ember)"></i><i style="background:var(--pv-surface)"></i></span></button>`).join("");
     $("#set-content-note").hidden = u.lang === "en";
+    // during a live test the help tours can't run, so they aren't offered
+    const sh = $("#set-help"); if (sh) sh.hidden = !!(session && !session.demo && document.body.dataset.screen === "test");
     renderGooseSetting();
   }
   // ───────── Goose Mode setting (a gameplay ruleset, separate from difficulty) ─────────
@@ -276,7 +345,8 @@
     const scr = document.body.dataset.screen;
     $("#island-ctx").textContent = tr(CTX_KEY[scr] || "nav.home");
     setIsland($("#island").classList.contains("open"));
-    if (scr === "home") renderHome();
+    if (scr === "phys" && window.PhysUI) window.PhysUI.render();
+    else if (scr === "home") renderHome();
     else if (scr === "practice") { if ($("#prac-run").hidden) renderDrills(); }
     else if (scr === "progress") renderProgressScreen();
     else if (scr === "course") renderCourse();
@@ -348,6 +418,16 @@
   function navigate(where, arg) {
     if (isAssessmentActive() && session) return; // never navigate away from a running test via the nav
     if (lobby) { clearInterval(lobby.timer); lobby = null; }
+    if (getSubject() === "physics" && window.PhysUI) {
+      // a Math lesson link (e.g. #c-quad.vertex_form) is a request for Math: follow it
+      if (where === "library" && arg && window.Concepts.get(arg)) { store.set(SUBJECT_KEY, "math"); applySubject(); }
+      else {
+        if (where === "home") { stopGuided(); return goHome(); }
+        const pv = { practice: "practice", course: "practice", review: "practice", learning: "practice", progress: "practice", library: "learn", studyroom: "lab" }[where];
+        const tab = { course: "course", review: "review", progress: "diagnostics", learning: "diagnostics" }[where];
+        if (pv) { stopGuided(); return window.PhysUI.open(pv, pv === "practice" ? { tab } : null); }
+      }
+    }
     if (where !== "practice") stopGuided();
     if (where === "library") { show("library"); window.Library.open(arg); }
     else if (where === "learning") { show("learning"); window.Analyst.render(); }
@@ -396,6 +476,7 @@
   // ───────────────────────── Basecamp ─────────────────────────
   function goHome() {
     stopGuided();
+    // both subjects use this same home screen; js/physics/home.js supplies the Physics content
     show("home");
     renderHome();
   }
@@ -463,7 +544,52 @@
   };
   const miniRing = (pct) => { const r = 13, c = 2 * Math.PI * r; return `<svg class="ring-mini" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="ring-track"/>${pct ? `<circle cx="16" cy="16" r="${r}" class="ring-fill" style="stroke-dasharray:${(pct / 100) * c} ${c}"/>` : ""}</svg>`; };
 
+  const isPhysics = () => getSubject() === "physics" && !!window.PhysHome && !!window.PhysUI && !!PT();
+  // the saved test belongs to one subject: each home only offers its own
+  function savedForSubject() {
+    let saved = savedSession();
+    if (saved && saved.items && timeLeftOf(saved) <= 0) { finishExpiredSession(saved); saved = null; }
+    if (saved && (saved.subject === "physics") !== (getSubject() === "physics")) saved = null;
+    return saved;
+  }
+  function renderResume(saved) {
+    const box = $("#resume-box");
+    if (!(saved && saved.items)) { box.innerHTML = ""; return; }
+    const answered = saved.items.filter(isAnswered).length;
+    const grp = saved.group ? ` · group ${esc(saved.group.code)}` : "";
+    box.innerHTML = `
+      <div class="resume-card glass ${saved.paused ? "paused" : ""}">
+        <div>
+          <span class="resume-kicker">${saved.paused ? "⏸ " : ""}${esc(tr("home.resumeTitle"))} · ${esc(levelName(levelOf(saved)))}</span>
+          <span class="resume-meta">${esc(tr("home.left", { time: clock(timeLeftOf(saved)), answered, total: saved.items.length }))}${grp}</span>
+        </div>
+        <div class="resume-actions">
+          <button class="btn btn-primary btn-sm" id="btn-resume" type="button">${esc(tr("home.resume"))}</button>
+          <button class="btn btn-link btn-sm" id="btn-discard" type="button">${esc(tr("home.discard"))}</button>
+        </div>
+      </div>`;
+    $("#btn-resume").onclick = resumeTest;
+    $("#btn-discard").onclick = async () => {
+      if (await confirmDialog("Discard this test?", "Your answers on the unfinished test will be deleted. It won't count in your history.", "Discard", "Keep it")) { store.del(KEYS.session); renderHome(); }
+    };
+  }
+  function renderPhysHome() {
+    const PH = window.PhysHome, w = PH.welcome();
+    $("#home-kicker").textContent = w.kicker;
+    $("#home-greeting").textContent = w.title;
+    $("#home-sub").textContent = w.sub;
+    const saved = savedForSubject();
+    renderResume(saved);
+    $("#topic-card").innerHTML = PH.topicCard(API);
+    renderModes();
+    $("#activity").innerHTML = PH.activity(API);
+    $("#goals").innerHTML = PH.goals(API);
+    $("#studio-concepts").innerHTML = PH.concepts(API);
+    $("#stats-panel").innerHTML = PH.stats(API);
+    if (getUI().layout === "studioplus") { $("#splus").innerHTML = PH.studioPlus(API, saved); const rs = $("#sp-resume"); if (rs) rs.onclick = resumeTest; } else $("#splus").innerHTML = "";
+  }
   function renderHome() {
+    if (isPhysics()) return renderPhysHome();
     const L = learningState();
     const Q = quadSummary(L);
     const prefs = getPrefs();
@@ -474,28 +600,8 @@
     $("#home-sub").textContent = first ? tr("home.sub.first") : tr("home.sub.back", { answers: Q.answers, topic: focusRec ? conceptTitle(window.Concepts.get(focusRec.concept)) : tr("home.topicName") });
 
     // in-progress test
-    let saved = savedSession();
-    if (saved && saved.items && timeLeftOf(saved) <= 0) { finishExpiredSession(saved); saved = null; }
-    const box = $("#resume-box");
-    if (saved && saved.items) {
-      const answered = saved.items.filter(isAnswered).length;
-      const grp = saved.group ? ` · group ${esc(saved.group.code)}` : "";
-      box.innerHTML = `
-        <div class="resume-card glass ${saved.paused ? "paused" : ""}">
-          <div>
-            <span class="resume-kicker">${saved.paused ? "⏸ " : ""}${esc(tr("home.resumeTitle"))} · ${esc(levelName(levelOf(saved)))}</span>
-            <span class="resume-meta">${esc(tr("home.left", { time: clock(timeLeftOf(saved)), answered, total: saved.items.length }))}${grp}</span>
-          </div>
-          <div class="resume-actions">
-            <button class="btn btn-primary btn-sm" id="btn-resume" type="button">${esc(tr("home.resume"))}</button>
-            <button class="btn btn-link btn-sm" id="btn-discard" type="button">${esc(tr("home.discard"))}</button>
-          </div>
-        </div>`;
-      $("#btn-resume").onclick = resumeTest;
-      $("#btn-discard").onclick = async () => {
-        if (await confirmDialog("Discard this test?", "Your answers on the unfinished test will be deleted. It won't count in your history.", "Discard", "Keep it")) { store.del(KEYS.session); renderHome(); }
-      };
-    } else box.innerHTML = "";
+    const saved = savedForSubject();
+    renderResume(saved);
 
     // current topic + mastery
     $("#topic-card").innerHTML = `
@@ -687,7 +793,7 @@
         <span class="mode-ico" aria-hidden="true">${MODE_ICON[m]}</span>
         <b class="mode-name">${esc(tr("mode." + m))}</b>
         <span class="mode-tag">${esc(tr("mode." + m + ".tag"))}</span>
-        <span class="mode-desc">${esc(tr("mode." + m + ".d"))}</span>
+        <span class="mode-desc">${esc(isPhysics() ? window.PhysHome.cardDesc(m) : tr("mode." + m + ".d"))}</span>
         <span class="mode-sel">${m === sel ? `✓ ${esc(tr("mode.selected"))}` : esc(tr("mode.preview"))}</span>
       </div>`).join("");
     renderPreview();
@@ -720,6 +826,7 @@
     return order.find((id) => L.prof[id].status === "not_attempted" || L.prof[id].status === "needs_work" || L.prof[id].status === "early_warning") || order[0];
   }
   function renderPreview() {
+    if (isPhysics()) { const m = selectedMode(); $("#mode-preview").className = `mode-preview p-${m}`; $("#mode-preview").innerHTML = window.PhysHome.preview(m, API, previewSeed); return; }
     const m = selectedMode(), L = learningState();
     const ex = previewExample(m);
     const rec = recommendedMode(L) === m;
@@ -742,7 +849,19 @@
         ${ex ? `<div class="mp-tags">${ex.tags.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
       </div>`;
   }
+  // Physics Normal / Challenging / Nightmare: a real test in the shared engine (Simple stays guided practice)
+  async function startPhysTest(level, phys = {}) {
+    if (!TEST_LEVELS.includes(level)) return;
+    if (savedSession() && !(await confirmDialog("Start over?", "You have an unfinished test. Starting a new one will discard it.", "Start new test", "Cancel"))) return;
+    store.del(KEYS.session);
+    if (PT()) PT().setOptions(level, phys);
+    startTest({ subject: "physics", level, phys: PT() ? PT().options(level) : phys });
+  }
   async function startMode(m) {
+    if (isPhysics()) {
+      if (m === "simple") { const sub = ($("#ph-simple-sub") || {}).value || window.PhysUI.prefs().sub; return window.PhysUI.startRun({ subs: [sub], n: 5 }); }
+      return startPhysTest(m, PT().options(m));
+    }
     if (m === "simple") return startGuided(($("#simple-skill") || {}).value || simpleSkill(learningState()));
     if (savedSession() && !(await confirmDialog("Start over?", "You have an unfinished test. Starting a new one will discard it.", "Start new test", "Cancel"))) return;
     store.del(KEYS.session);
@@ -1045,7 +1164,7 @@
     session = saved;
     const attempt = buildAttempt(true);
     attempt.totalTime = durOf(saved);
-    const h = getHistory(); h.push(attempt); store.set(KEYS.history, h);
+    pushAttempt(attempt);
     store.del(KEYS.session);
     session = null;
   }
@@ -1068,16 +1187,44 @@
     const QB = window.QuadBank;
     const reg = (q, kind) => { BANKS[kind].set(q.id, q); return q; };
     if (level === "nightmare") return QB.buildNightmare(rnd).map((q) => wrItem(reg(q, "wr")));
-    const t = QB.buildTest(level === "challenge" ? "challenge" : "normal", rnd);
+    const L = level === "challenge" ? "challenge" : "normal";
+    const t = QB.buildTest(L, rnd);
+    addTransformations(t, L, rnd);
     return [...t.wr.map((q) => wrItem(reg(q, "wr"))), ...t.nr.map((q) => nrItem(reg(q, "nr"))), ...t.mc.map((q) => mcItem(reg(q, "mc"), rnd))];
   }
 
+  // Quadratic transformations (js/gen/unit-f-transform.js) are part of the unit test: two of the ten multiple-choice
+  // questions, and on about half of the tests the 2-mark graphing written-response slot becomes a 2-mark
+  // transformations question. Marks and the 34-mark layout are unchanged. Seeded, so group tests stay identical.
+  function addTransformations(t, L, rnd) {
+    const B = window.Bank; if (!B || !B.byFam("ft_combined")) return;
+    const fams = ["ft_vertical", "ft_horizontal", "ft_translate", "ft_combined"].filter((f) => B.byFam(f).modes.includes(L));
+    const slots = shuffle(t.mc.map((_, i) => i), rnd).slice(0, 2);
+    slots.forEach((i) => { try { t.mc[i] = B.generate(fams[Math.floor(rnd() * fams.length)], "mc", L, rnd); } catch { /* keep the original */ } });
+    if (rnd() < 0.5 && t.wr[2]) {
+      const marks = (q) => q.parts.reduce((a, p) => a + p.marks, 0), want = marks(t.wr[2]);
+      for (let k = 0; k < 60; k++) { try { const q = B.make("ft_combined", "wr", L, 1 + Math.floor(rnd() * 2147483646)); if (marks(q) === want) { t.wr[2] = q; break; } } catch { /* next seed */ } }
+    }
+  }
   const qOf = (item) => BANKS[item.kind].get(item.qid);
+  // Physics questions run in this same test engine; js/physics/test.js supplies their rendering, input and review
+  const PT = () => window.PhysTest;
+  const isPhysQ = (q) => !!(PT() && PT().isPhys(q));
+  const isPhysA = (a) => !!(a && a.subject === "physics");
+  const topicOf = (q) => (isPhysQ(q) ? PT().topic(q) : q.topic);
+  // a finished attempt goes to its own subject's history (Physics never mixes into Math scores or insights)
+  function pushAttempt(a) {
+    if (isPhysA(a) && PT()) { PT().save(a); PT().record(a, gradeItem, qOf); return; }
+    const h = getHistory(); h.push(a); store.set(KEYS.history, h);
+  }
+  const historyFor = (a) => (isPhysA(a) && PT() ? PT().history() : getHistory());
   const maxMarks = (item) => item.kind === "wr" ? qOf(item).parts.reduce((s, p) => s + p.marks, 0) : 1;
   function answeredParts(item) {
     if (item.kind === "mc") return item.chosen !== null ? 1 : 0;
     if (item.kind === "nr") return String(item.response || "").trim() ? 1 : 0;
-    return qOf(item).parts.filter((p) => String(item.responses[p.key] || "").trim()).length;
+    const q = qOf(item);
+    if (isPhysQ(q)) return q.parts.filter((p) => PT().answered(p, item.responses[p.key])).length;
+    return q.parts.filter((p) => String(item.responses[p.key] || "").trim()).length;
   }
   const totalParts = (item) => item.kind === "wr" ? qOf(item).parts.length : 1;
   const isAnswered = (item) => answeredParts(item) === totalParts(item);
@@ -1092,26 +1239,29 @@
   // opts.group = decoded group code + name → seeded questions and (optionally) a shared clock
   function startTest(opts = {}) {
     const now = Date.now();
-    const g = opts.group || null;
+    const g = opts.subject === "physics" ? null : opts.group || null;
+    const phys = opts.subject === "physics" && PT() && TEST_LEVELS.includes(opts.level) ? PT().build(opts.level, opts.phys || {}) : null;
+    if (opts.subject === "physics" && !(phys && phys.questions.length)) { confirmDialog(tr("prac.unavailTitle"), esc(tr("ph.notAtLevelNote", { mode: tr("mode." + (opts.level || "normal")) })), tr("common.ok"), tr("common.close")); return; }
     const level = g ? g.level : opts.level || getPrefs().level;
     if (!TEST_LEVELS.includes(level)) return startTest({ ...opts, level: /^nightmare/.test(level || "") ? "nightmare" : "normal" });
     const scheduled = !!(g && g.start);
     const prefs = getPrefs();
-    const minutes = g ? g.minutes || 60 : opts.minutes || prefs.minutes || 60;
+    const minutes = phys ? phys.opts.minutes : g ? g.minutes || 60 : opts.minutes || prefs.minutes || 60;
     const fireOn = prefs.buddyMode !== "off";
     session = {
       id: now.toString(36) + Math.random().toString(36).slice(2, 6),
       startedAt: scheduled ? g.start : now,
       elapsed: scheduled ? Math.max(0, (now - g.start) / 1000) : 0,
-      lastActive: now, paused: false, pauses: 0, level, subject: "quadratics",
+      lastActive: now, paused: false, pauses: 0, level, subject: phys ? "physics" : "quadratics", physOpts: phys ? phys.opts : undefined,
       group: g ? { code: g.code, name: g.name || "", start: g.start, scheduled } : null,
-      items: buildTest(level, g ? window.Group.rng(g.seed) : Math.random),
+      items: phys ? phys.questions.map((q) => wrItem(BANKS.wr.get(q.id) ? q : (BANKS.wr.set(q.id, q), q))) : buildTest(level, g ? window.Group.rng(g.seed) : Math.random),
       current: 0, mode: prefs.buddyMode, buddy: null,
       duration: minutes * 60,
       hardcore: fireOn && !!prefs.hardcore,
       drain: fireOn && !!prefs.drain && !scheduled, // a shared clock can't drain for one person
       companion: fireOn && window.Companion ? (() => { const c = window.Companion.normalize(prefs.companion || window.Companion.full()); return c.any ? c : null; })() : null, // campfire on = full minigame unless customised
       gameOvers: 0, turnedOff: false,
+      hints: !!prefs.allowHints, // exam conditions by default: hints only if allowed in Test options (never in Nightmare)
     };
     if (prefs.goose) gooseRules(session);
     saveSession();
@@ -1379,7 +1529,8 @@
     const { text } = labelOf(session.current);
     const marks = maxMarks(item);
 
-    $("#q-topic").textContent = q.topic;
+    $("#q-topic").textContent = topicOf(q);
+    $("#q-topic").hidden = !session.demo; // the topic name gives away the method: shown in the review, not in the exam
     $("#q-label").textContent = `${text} · ${marks} mark${marks > 1 ? "s" : ""}`;
     const flag = $("#btn-flag");
     flag.setAttribute("aria-pressed", item.flagged);
@@ -1406,6 +1557,9 @@
           <div class="preview" data-preview="nr"></div>
         </div>`;
       updatePreview($("#nr-input"));
+    } else if (isPhysQ(q)) {
+      body.innerHTML = PT().questionHTML(q, item, renderMath);
+      if (item._focus) { const f = $(item._focus, body); if (f) f.focus(); delete item._focus; }
     } else {
       body.innerHTML = `
         <div class="q-text">${renderMath(q.intro)}</div>
@@ -1475,6 +1629,12 @@
     const t = e.target;
     if (!session) return;
     const item = session.items[session.current];
+    if (PT() && (t.dataset.ptVal || t.dataset.ptUnit)) {
+      PT().handleInput(e, item);
+      renderProgress(); renderNav();
+      clearTimeout(onInput._t); onInput._t = setTimeout(saveSession, 400);
+      return;
+    }
     if (t.dataset.field === "nr") item.response = t.value;
     else if (t.dataset.field === "work") item.work = t.value;
     else if (t.dataset.part) item.responses[t.dataset.part] = t.value;
@@ -1501,9 +1661,9 @@
     }
   }
   // ───────── hints: what each mode allows ─────────
-  const hintPolicy = (lv) => (session && session.demo ? "steps" : HINT_POLICY[lv] || "none");
+  const hintPolicy = (lv) => (session && session.demo ? "steps" : session && !session.hints ? "none" : HINT_POLICY[lv] || "none");
   function renderHint(item, q) {
-    const pol = hintPolicy(session.level), hints = (q.hints || []).filter(Boolean);
+    const pol = hintPolicy(session.level), hints = isPhysQ(q) ? PT().hints(q) : (q.hints || []).filter(Boolean);
     const allowed = pol === "none" ? 0 : pol === "one" ? Math.min(1, hints.length) : hints.length;
     const used = Math.min(item.hints || 0, allowed);
     const btn = $("#btn-hint"), box = $("#hint-box");
@@ -1513,7 +1673,7 @@
     btn.title = pol === "none" ? tr("test.hintsOff") : "";
     box.hidden = !used;
     box.innerHTML = used ? `<ol class="hint-list">${hints.slice(0, used).map((h) => `<li>${renderMath(h)}</li>`).join("")}</ol>` : "";
-    if (pol === "none" && session.level === "nightmare") { btn.hidden = true; }
+    if (pol === "none") { btn.hidden = true; }
   }
   function useHint() {
     if (!session || session.paused) return;
@@ -1534,6 +1694,8 @@
   // ───────── Studio: formula reference for the concepts in this question ─────────
   function renderTestInfo(q) {
     const el = $("#test-info"); if (!el) return;
+    if (isPhysQ(q)) { el.innerHTML = PT().formulaSheet(renderMath); return; }
+    if (session && !session.demo) { el.innerHTML = ""; return; } // formulas chosen for this question would give away the method
     const cids = window.Concepts.conceptsFor(q);
     const fs = (window.Concepts.FORMULAS || []).filter((f) => f.related.some((r) => cids.includes(r))).slice(0, 4);
     el.innerHTML = fs.length ? `<p class="ti-k">${esc(tr("lib.formulas"))}</p>${fs.map((f) => `<div class="ti-f"><span class="ti-n">${esc(f.name)}</span><div class="ti-tex">${tex(f.tex, true)}</div><span class="ti-w">${esc(f.when)}</span></div>`).join("")}` : "";
@@ -1618,7 +1780,7 @@
     }
     return {
       id: session.id, date: Date.now(), total, earned, percent: total ? Math.round((earned / total) * 1000) / 10 : 0,
-      subject: session.subject || "radicals", hintsUsed: items.reduce((s, it) => s + (it.hints || 0), 0),
+      subject: session.subject || "radicals", physOpts: session.physOpts, hintsUsed: items.reduce((s, it) => s + (it.hints || 0), 0),
       sections, totalTime: Math.round(elapsed), avgTime: Math.round((sumTime / items.length) * 10) / 10,
       timedOut, pauses: session.pauses || 0, buddy, items,
       level: session.level || "normal",
@@ -1633,7 +1795,7 @@
     if (!session.paused) { const dt = Math.max(0, (now - lastTick) / 1000); session.items[session.current].time += dt; session.elapsed += dt; }
     if (fire) fire.stop();
     const attempt = buildAttempt(timedOut);
-    const h = getHistory(); h.push(attempt); store.set(KEYS.history, h);
+    pushAttempt(attempt);
     store.del(KEYS.session);
     teardownTest();
     showResults(attempt, true);
@@ -1653,8 +1815,8 @@
     reviewFilter = "all";
     show("results");
 
-    const lvName = levelName(levelOf(attempt));
-    const h = getHistory().filter((a) => levelOf(a) === levelOf(attempt));
+    const lvName = isPhysA(attempt) ? `${levelName(levelOf(attempt))} ${tr("subject.physics.short")}` : levelName(levelOf(attempt));
+    const h = historyFor(attempt).filter((a) => levelOf(a) === levelOf(attempt));
     const ranked = h.slice().sort(compareAttempts);
     const rank = ranked.findIndex((a) => a.id === attempt.id) + 1;
     const prevBest = ranked.filter((a) => a.id !== attempt.id)[0];
@@ -1707,15 +1869,15 @@
     const topics = new Map();
     for (const it of attempt.items) {
       const q = qOf(it); if (!q) continue;
-      const t = topics.get(q.topic) || { e: 0, m: 0 };
-      t.e += it.earned; t.m += it.max; topics.set(q.topic, t);
+      const t = topics.get(topicOf(q)) || { e: 0, m: 0 };
+      t.e += it.earned; t.m += it.max; topics.set(topicOf(q), t);
     }
     const topHTML = [...topics.entries()].sort((a, b) => a[1].e / a[1].m - b[1].e / b[1].m).map(([name, t]) => {
       const pct = Math.round((t.e / t.m) * 100);
       return `<div class="topic-row"><div class="topic-row-head"><span>${esc(name)}</span><span><b>${fmtMarks(t.e)}/${t.m}</b></span></div>
         <div class="bar"><div class="bar-fill ${pct >= 75 ? "good" : pct >= 50 ? "mid" : "low"}" style="width:${pct}%"></div></div></div>`;
     }).join("");
-    $("#topic-breakdown").innerHTML = `${secHTML}<h3 class="sub-h">By topic <span class="muted small">(weakest first)</span></h3>${topHTML}`;
+    $("#topic-breakdown").innerHTML = `${secHTML}<h3 class="sub-h">By topic <span class="muted small">(weakest first)</span></h3>${topHTML}${isPhysA(attempt) && PT() ? PT().resultsHTML(attempt) : ""}`;
 
     const b = attempt.buddy || { mode: "off" };
     const noBuddy = b.mode === "off" && !b.turnedOff && !attempt.goose;
@@ -1811,7 +1973,7 @@
           <span class="review-num">${L.text}</span>
           <span class="status-pill ${status}">${statusLabel} · ${fmtMarks(it.earned)}/${it.max}</span>
           ${it.flagged ? '<span class="pill">⚑ Flagged</span>' : ""}${it.hints ? `<span class="pill pill-hint">${esc(tr("test.hintsUsed", { n: it.hints }))}</span>` : ""}
-          <span class="topic-tag">${esc(q.topic)}</span>
+          <span class="topic-tag">${esc(topicOf(q))}</span>
           <span class="review-time" title="Time spent on this question"><span class="time-bar"><span style="width:${(it.time / maxT) * 100}%"></span></span>${dur(it.time)}</span>
         </header>`;
       let bodyHTML = "";
@@ -1832,6 +1994,8 @@
             ${ok ? "" : `<div class="is-correct"><span class="cmp-label">Correct answer</span>${tex(q.ansTex || String(q.answer))}</div>`}
           </div>
           <details class="explain"${ok ? "" : " open"}><summary>How to solve it</summary><div>${renderMath(q.e)}</div></details>`;
+      } else if (isPhysQ(q)) {
+        bodyHTML = PT().reviewHTML(q, it, gradeItem(it), renderMath);
       } else {
         const g = gradeItem(it);
         const parts = q.parts.map((p, k) => {
@@ -1853,8 +2017,8 @@
               <p class="rubric-title">Marking key</p><ul class="rubric">${q.rubric.map((r) => `<li>${renderMath(r)}</li>`).join("")}</ul></div>
           </details>`;
       }
-      const cids = window.Concepts.conceptsFor(q);
-      const learnRow = `<div class="review-learn">${cids.map((c) => `<button class="btn btn-secondary btn-sm" data-lesson="${c}" type="button">Lesson: ${esc(window.Concepts.get(c).title)}</button>`).join("")}${it.earned < it.max ? `<button class="btn btn-primary btn-sm" data-explain="${i}" type="button">Explain my mistake</button>` : `<button class="btn btn-secondary btn-sm" data-explain="${i}" type="button">Ask the tutor</button>`}</div>`;
+      const cids = isPhysQ(q) ? [] : window.Concepts.conceptsFor(q);
+      const learnRow = isPhysQ(q) ? PT().learnRow(q) : `<div class="review-learn">${cids.map((c) => `<button class="btn btn-secondary btn-sm" data-lesson="${c}" type="button">Lesson: ${esc(window.Concepts.get(c).title)}</button>`).join("")}${it.earned < it.max ? `<button class="btn btn-primary btn-sm" data-explain="${i}" type="button">Explain my mistake</button>` : `<button class="btn btn-secondary btn-sm" data-explain="${i}" type="button">Ask the tutor</button>`}</div>`;
       bodyHTML += learnRow;
       const sketch = it.sketch && it.sketch.length ? `<div class="sketch-review"><span class="cmp-label">Your scratch work</span><canvas data-sketch="${i}" aria-label="Your scratch work for ${L.text}"></canvas></div>` : "";
       bodyHTML = bodyHTML.replace(/<details class="explain"/, sketch + '<details class="explain"');
@@ -1957,19 +2121,35 @@
   }
 
   // ───────── Create test (setup dialog) ─────────
+  let setupSubject = "math";
+  // Physics options in the shared Create-test dialog: topics that really generate at the chosen level, and length
+  function renderPhysSetup(level) {
+    const o = PT().options(level);
+    const tops = PT().topics(level), cur = tops.find((t) => t.id === o.topic && t.ok) ? o.topic : PT().MIX;
+    const units = window.PhysCurriculum.UNITS;
+    const tl = (t) => (t.id === PT().MIX ? tr("pt.mixAll") : PT().loc(t.title));
+    $("#s-phys-topic").innerHTML = `<option value="${PT().MIX}" ${cur === PT().MIX ? "selected" : ""} ${tops[0].ok ? "" : "disabled"}>${esc(tr("pt.mixAll"))}</option>` + units.map((u) => { const rows = tops.filter((t) => t.id !== PT().MIX && t.unit === u.id && t.ok); return rows.length ? `<optgroup label="${esc(PT().loc(u.title))}">${rows.map((t) => `<option value="${t.id}" ${t.id === cur ? "selected" : ""}>${esc(tl(t))}</option>`).join("")}</optgroup>` : ""; }).join("");
+    $("#s-phys-n").innerHTML = PT().COUNTS[level].map((n) => `<button type="button" role="radio" data-n="${n}" class="${n === o.n ? "active" : ""}" aria-checked="${n === o.n}">${n}</button>`).join("");
+  }
   function openSetup(opts = {}) {
     const p = getPrefs();
     const d = $("#setup-dialog");
+    setupSubject = opts.subject === "physics" && PT() ? "physics" : "math";
+    const physSetup = setupSubject === "physics";
+    $("#s-phys").hidden = !physSetup;
+    $(".group-section", d).hidden = physSetup; // group tests share seeded Math tests only
     const pick = (sel, attr, val) => { for (const b of $$(`${sel} button`)) { const on = b.dataset[attr] === String(val); b.classList.toggle("active", on); b.setAttribute("aria-checked", on); } };
     pick("#s-level", "level", TEST_LEVELS.includes(opts.level) ? opts.level : p.level);
     pick("#s-buddy", "mode", p.buddyMode === "off" ? "normal" : p.buddyMode);
     $("#s-camp").checked = p.buddyMode !== "off";
+    $("#s-hints").checked = !!p.allowHints;
     $("#s-camp-custom").open = false;
     pick("#s-start", "start", 0);
-    $("#s-time").value = p.minutes || 60;
+    $("#s-time").value = physSetup ? PT().options(TEST_LEVELS.includes(opts.level) ? opts.level : "normal").minutes : p.minutes || 60;
+    if (physSetup) renderPhysSetup(TEST_LEVELS.includes(opts.level) ? opts.level : "normal");
     $("#s-hardcore").checked = !!p.hardcore;
     $("#s-drain").checked = !!p.drain;
-    $("#s-group").checked = !!opts.group;
+    $("#s-group").checked = !physSetup && !!opts.group;
     $("#s-name").value = p.name || "";
     if (window.Companion) {
       // a campfire that's on but was never customised starts as the full minigame
@@ -2037,8 +2217,10 @@
     const mins = Number($("#s-time").value);
     $("#s-time-out").textContent = `${mins} min`;
     $("#s-time").style.setProperty("--fill", `${((mins - 10) / 110) * 100}%`);
-    $("#s-level-hint").textContent = LEVELS[level].hint;
+    $("#s-level-hint").textContent = setupSubject === "physics" ? tr("pt.hint." + level) : LEVELS[level].hint;
+    if (setupSubject === "physics") $("#s-phys-hint").textContent = tr("pt.lenHint", { n: Number(activeVal("#s-phys-n", "n", PT().options(level).n)) });
     const fireOn = mode !== "off";
+    $("#s-hints").disabled = isNm; // Nightmare never has hints
     $("#s-hardcore").disabled = !fireOn;
     $("#s-drain").disabled = !fireOn || (group && startMin > 0);
     $("#s-camp-body").hidden = !fireOn;
@@ -2050,16 +2232,20 @@
       ? `Everyone starts together in ${startMin} minutes and finishes at the same moment. Pause is off so the clocks stay in sync.`
       : "Each person's clock starts when they press Start, and Pause still works.";
     $("#s-go").textContent = group ? "Create group test" : isNm ? tr("mode.start.nightmare") : "Start test";
-    $("#setup-title").textContent = group ? "Create a group test" : "Create test";
+    $("#setup-title").textContent = group ? "Create a group test" : setupSubject === "physics" ? tr("pt.createTitle") : "Create test";
   }
   async function submitSetup() {
     const level = activeVal("#s-level", "level", "normal");
     if (!TEST_LEVELS.includes(level)) return;
+    if (setupSubject === "physics") {
+      setPrefs({ mode: level, allowHints: $("#s-hints").checked, buddyMode: campMode(), hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}) });
+      return startPhysTest(level, { topic: $("#s-phys-topic").value, n: Number(activeVal("#s-phys-n", "n", 6)), minutes: Number($("#s-time").value) || 40 });
+    }
     const buddyMode = campMode();
     const minutes = Number($("#s-time").value) || 60;
     const group = $("#s-group").checked;
     const name = $("#s-name").value.trim().slice(0, 18);
-    setPrefs({ level, mode: level, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
+    setPrefs({ level, mode: level, allowHints: $("#s-hints").checked, buddyMode, minutes, hardcore: $("#s-hardcore").checked, drain: $("#s-drain").checked, ...(compDraft ? { companion: compDraft } : {}), ...(group ? { name } : {}) });
     if (group) {
       const startMin = Number(activeVal("#s-start", "start", 0));
       const seed = (crypto.getRandomValues(new Uint32Array(1))[0] & 0x7ffff) || 1;
@@ -2278,6 +2464,7 @@
     if (scr === "learning") return window.Analyst.context();
     if (scr === "review") return window.Review.context();
     if (scr === "room" && window.Rooms) return window.Rooms.context();
+    if (scr === "home" && isPhysics()) return { type: "basecamp", title: "Physics 11 home", text: [plain($("#home-sub").innerHTML), "Selected mode preview: " + plain($("#mode-preview").innerHTML), "Stats panel: " + plain($("#stats-panel").innerHTML)].join("\n"), concepts: [] };
     if (scr === "home") {
       const L = learningState();
       return {
@@ -2306,6 +2493,10 @@
     openSheet, closeSheet, copyText, getPrefs, hydratePlots, tr,
     pad: () => ensurePad(), inTest: () => !!session && document.body.dataset.screen === "test",
     setIsland, setSettings, selectMode, demo, game, inLiveTest: () => !!(session && !session.demo),
+    markNav, getUI, selectedMode, setMode: (m) => setPrefs({ mode: m }), rel, getSubject, switchSubject, toast,
+    // Physics tests use this same engine
+    ring, miniRing, startPhysTest, openPhysSetup: (level) => openSetup({ level, subject: "physics" }), savedSession, timeLeftOf, showResults, levelName, MODE_ICON: () => MODE_ICON,
+    finishExpired: () => { const s = savedSession(); if (s && s.items && timeLeftOf(s) <= 0) { finishExpiredSession(s); return true; } return false; },
     ensurePadPage: () => { if (!(session && document.body.dataset.screen === "test")) usePadGeneral(); },
   };
 
@@ -2330,14 +2521,15 @@
     $("#btn-lobby-leave").addEventListener("click", leaveLobby);
     $("#btn-copy-code").addEventListener("click", () => copyText($("#lobby-code").textContent, null, $("#copy-note")));
     $("#btn-copy-link").addEventListener("click", () => copyText($("#lobby-link").value, $("#lobby-link"), $("#copy-note")));
-    for (const grp of ["#s-level", "#s-buddy", "#s-start"]) {
+    for (const grp of ["#s-level", "#s-buddy", "#s-start", "#s-phys-n"]) {
       $(grp).addEventListener("click", (e) => {
         const b = e.target.closest("button"); if (!b) return;
         for (const x of $$(`${grp} button`)) { x.classList.toggle("active", x === b); x.setAttribute("aria-checked", x === b); }
+        if (grp === "#s-level" && setupSubject === "physics") { renderPhysSetup(b.dataset.level); $("#s-time").value = PT().options(b.dataset.level).minutes; }
         syncSetup();
       });
     }
-    for (const id of ["#s-time", "#s-group", "#s-hardcore", "#s-drain"]) $(id).addEventListener("input", syncSetup);
+    for (const id of ["#s-time", "#s-group", "#s-hardcore", "#s-drain", "#s-hints"]) $(id).addEventListener("input", syncSetup);
     $("#s-comp").addEventListener("change", onCompSetup);
     $("#s-camp").addEventListener("change", onCampMaster);
     $("#s-camp-reset").addEventListener("click", () => { compDraft = window.Companion.full(); renderCompSetup(); });
@@ -2355,7 +2547,9 @@
     $("#mode-next").addEventListener("click", () => selectMode(MODES[(MODES.indexOf(selectedMode()) + 1) % MODES.length]));
     document.addEventListener("click", (e) => {
       const st = e.target.closest("[data-start-mode]"); if (st) { e.preventDefault(); return startMode(st.dataset.startMode); }
-      const su = e.target.closest("[data-setup-mode]"); if (su) { e.preventDefault(); return openSetup({ level: su.dataset.setupMode }); }
+      const su = e.target.closest("[data-setup-mode]"); if (su) { e.preventDefault(); return openSetup({ level: su.dataset.setupMode, subject: isPhysics() ? "physics" : undefined }); }
+      // Physics test options shown on the home preview / Studio+ launcher (not inside the Physics screen)
+      const ptn = e.target.closest("[data-pt-n]"); if (ptn && !ptn.closest("#phys-root") && PT()) { e.preventDefault(); PT().setOptions(selectedMode(), { n: Number(ptn.dataset.ptN) }); return renderHome(); }
       const dr = e.target.closest("[data-drill]"); if (dr) { e.preventDefault(); return startDrill(dr.dataset.drill, dr.dataset.level); }
       const cm = e.target.closest("[data-course-mode]"); if (cm) { setPrefs({ courseMode: cm.dataset.courseMode }); return renderCourse(); }
       const cs = e.target.closest("[data-course-sub]"); if (cs) { e.preventDefault(); return startCourse({ sub: cs.dataset.courseSub }); }
@@ -2373,11 +2567,15 @@
         if (t === "lang") { const l = $("#set-lang .active") || $("#set-lang button"); if (l) l.focus(); }
         return;
       }
-      const at = e.target.closest("[data-attempt]"); if (at) { e.preventDefault(); const a = getHistory().find((x) => x.id === at.dataset.attempt); if (a) showResults(a, false); return; }
+      const at = e.target.closest("[data-attempt]"); if (at) { e.preventDefault(); const a = [...getHistory(), ...(PT() ? PT().history() : [])].find((x) => x.id === at.dataset.attempt); if (a) showResults(a, false); return; }
       if (e.target.id === "btn-new-example") { previewSeed++; return renderPreview(); }
     });
     document.addEventListener("toggle", (e) => { const d = e.target; if (d.classList && d.classList.contains("course-unit") && d.open) setPrefs({ courseOpen: d.dataset.unit }); }, true);
     $("#mode-preview").addEventListener("change", (e) => { if (e.target.id === "simple-skill") setPrefs({ simpleSkill: e.target.value }); });
+    document.addEventListener("change", (e) => {
+      if ((e.target.id === "pt-topic" || e.target.id === "sp-pt-topic") && PT()) { PT().setOptions(selectedMode(), { topic: e.target.value }); renderHome(); }
+      if (e.target.id === "ph-simple-sub" && window.PhysUI) { window.PhysUI.setSub(e.target.value); previewSeed = 1; renderPreview(); }
+    });
     $("#splus").addEventListener("change", (e) => { if (e.target.id === "sp-unit") { setPrefs({ spUnit: e.target.value }); renderHome(); const u = $("#sp-unit"); if (u) u.focus(); } });
 
     // island navigation + puppy settings
@@ -2395,7 +2593,7 @@
       if (e.target.closest("[data-close-pop]")) return setSettings(false);
       // scoped selectors: <html> itself carries data-layout / data-theme
       const l = e.target.closest("#set-lang [data-lang]"); if (l) { applyUI({ lang: l.dataset.lang }); return; }
-      const lo = e.target.closest("#set-layout [data-layout]"); if (lo) { applyUI({ layout: lo.dataset.layout }); if (document.body.dataset.screen === "home") renderHome(); if (session && pad && pad._place) pad._place(); return; }
+      const lo = e.target.closest("#set-layout [data-layout]"); if (lo) { applyUI({ layout: lo.dataset.layout }); if (document.body.dataset.screen === "home") renderHome(); if (document.body.dataset.screen === "phys" && window.PhysUI) window.PhysUI.render(); if (session && pad && pad._place) pad._place(); return; }
       const th = e.target.closest("#set-theme [data-theme-opt]"); if (th) { applyUI({ theme: th.dataset.themeOpt }); }
       if (e.target.closest("#goose-toggle")) { if (selectedMode() === "simple" && !getPrefs().goose) return; setPrefs({ goose: !getPrefs().goose }); renderSettings(); const b = $("#goose-toggle"); if (b) b.focus(); return; }
     });
@@ -2433,6 +2631,14 @@
 
     const body = $("#q-body");
     body.addEventListener("click", (e) => {
+      if (session && PT()) {
+        const item = session.items[session.current], q = qOf(item);
+        if (isPhysQ(q)) {
+          const r = PT().handleClick(e, item, q);
+          if (r) { if (fire) fire.react("happy"); saveSession(); renderQuestion(); }
+          return;
+        }
+      }
       const c = e.target.closest(".choice");
       if (c) return choose(Number(c.dataset.orig));
       const seg = e.target.closest("[data-choice]");
@@ -2448,6 +2654,7 @@
       if (ins) insertAtCursor(ins.closest(".wr-part").querySelector("input"), ins.dataset.ins);
     });
     body.addEventListener("input", onInput);
+    body.addEventListener("change", (e) => { if (e.target.dataset && e.target.dataset.ptUnit) onInput(e); });
     body.addEventListener("input", () => { lastTyped = Date.now(); });
     body.addEventListener("mousedown", (e) => { if (e.target.closest("[data-ins]")) e.preventDefault(); });
 
@@ -2463,6 +2670,8 @@
     $("#btn-again").addEventListener("click", async () => {
       if (savedSession() && !(await confirmDialog("Start over?", "You have an unfinished test. Starting a new one will discard it.", "Start new test", "Cancel"))) return;
       store.del(KEYS.session);
+      // "Take another" repeats the same kind of test: same subject, level and options
+      if (isPhysA(viewing)) return startTest({ subject: "physics", level: levelOf(viewing), phys: viewing.physOpts ? { topic: viewing.physOpts.topic, n: viewing.physOpts.n, minutes: viewing.physOpts.minutes } : {} });
       startTest();
     });
     $("#btn-home").addEventListener("click", goHome);
@@ -2509,6 +2718,11 @@
       if (qz) { e.preventDefault(); if (session) return; show("library"); return window.Library.open(qz.dataset.quiz, { quiz: true }); }
       const ex = e.target.closest("[data-explain]");
       if (ex && viewing) { e.preventDefault(); return explainMistake(Number(ex.dataset.explain)); }
+      // Physics follow-ups from a Physics test's results (lesson, or untimed practice of those families)
+      const pl = e.target.closest("[data-phys-lesson]");
+      if (pl && window.PhysUI && !session) { e.preventDefault(); return window.PhysUI.open("learn", { lesson: pl.dataset.physLesson, ltab: "lessons" }); }
+      const pf = e.target.closest("[data-phys-fams]");
+      if (pf && window.PhysUI && !session) { e.preventDefault(); return window.PhysUI.startRun({ families: pf.dataset.physFams.split(","), n: 5 }); }
     });
 
     window.addEventListener("pagehide", saveSession);
@@ -2537,19 +2751,30 @@
     window.Tutor.init(API);
     if (window.Tools) window.Tools.init(API);
     if (window.Onboarding) window.Onboarding.init(API);
+    if (window.PhysUI) window.PhysUI.init(API);
+    applySubject();
+    $("#subject-btn").addEventListener("click", (e) => { e.stopPropagation(); setSubjectMenu($("#subject-menu").hidden); });
+    $("#subject-menu").addEventListener("click", (e) => { const o = e.target.closest("[data-subject]"); if (o) switchSubject(o.dataset.subject); });
+    $("#subject-menu").addEventListener("keydown", (e) => {
+      const items = $$("#subject-menu [data-subject]"), k = items.indexOf(document.activeElement);
+      if (e.key === "Escape") { e.preventDefault(); setSubjectMenu(false); $("#subject-btn").focus(); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(k + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
+    });
+    document.addEventListener("pointerdown", (e) => { if (!$("#subject-menu").hidden && !e.target.closest("#subject-menu, #subject-btn")) setSubjectMenu(false); });
+    document.addEventListener("i18n:change", applySubject);
     if (window.Goose) window.Goose.init({
       t: tr,
       // the goose only plays where there's a game to disrupt, never over tours, dialogs, settings or a paused test
       applicable: () => {
         const scr = document.body.dataset.screen;
-        if (!["home", "test", "practice", "course"].includes(scr)) return false;
+        if (!["home", "test", "practice", "course", "phys"].includes(scr)) return false;
         if ((window.Tour && window.Tour.active) || $("#dialog").open || !$("#settings-pop").hidden || !$("#gameover").hidden) return false;
         if (scr === "test" && (!session || session.demo || session.paused || session.gameOver)) return false;
         return true;
       },
       stageEl: () => $(`#screen-${document.body.dataset.screen}`),
       // what a stolen panel must not land on
-      essentials: () => ["#question-card", ".q-nav", "#btn-start", "#mode-track", "#prac-run .quiz-fb-actions", "#prac-run [data-pr]", "#splus .sp-launch .btn-primary", "#tools-btn"].flatMap((sel) => [...document.querySelectorAll(sel)]).filter((el) => el.offsetParent).map((el) => el.getBoundingClientRect()),
+      essentials: () => ["#question-card", ".q-nav", ".ph-q", ".ph-explorer-panel", ".ph-lab", ".ph-launch", "#btn-start", "#mode-track", "#prac-run .quiz-fb-actions", "#prac-run [data-pr]", "#splus .sp-launch .btn-primary", "#tools-btn"].flatMap((sel) => [...document.querySelectorAll(sel)]).filter((el) => el.offsetParent).map((el) => el.getBoundingClientRect()),
       calm: () => { const p = getPrefs(); return p.gooseCalm === undefined ? matchMedia("(prefers-reduced-motion: reduce)").matches : !!p.gooseCalm; },
       turnOff: () => setPrefs({ goose: false }),
     });

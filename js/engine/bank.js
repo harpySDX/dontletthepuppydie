@@ -109,10 +109,12 @@
         const g = C.grade(p, resp);
         if (g.verdict !== "right") throw new Error(`wr key ${p.kind} ${resp}: ${g.note}`);
       }
+      if (root.PhysCheck && q.parts.some((p) => root.PhysCheck.handles(p.kind))) root.PhysCheck.validate(q);
     }
   }
   function keyResponse(p) {
     if (root.AnswerCheck && root.AnswerCheck.handles(p.kind)) return root.AnswerCheck.keyResponse(p);
+    if (root.PhysCheck && root.PhysCheck.handles(p.kind)) return root.PhysCheck.keyResponse(p);
     if (root.QuadCheck && root.QuadCheck.handles(p.kind)) return root.QuadCheck.keyResponse(p);
     if (p.kind === "set") return p.answer.length ? p.answer.join(", ") : "none";
     if (p.kind === "restriction") return `x${p.answer.op}${p.answer.value}`;
@@ -125,12 +127,13 @@
     if (!F.kinds.includes(kind)) throw new Error(`${famId} has no ${kind}`);
     if (!F.modes.includes(mode)) throw new Error(`${famId} not in ${mode}`);
     const r = rng(seed * 7919 + famId.length * 104729 + MODES.indexOf(mode) * 31 + kind.length * 17);
-    const out = F.gen(r, mode, kind, K, { seed });
+    let out = F.gen(r, mode, kind, K, { seed });
+    if (F.subject === "physics" && root.PhysKit) out = root.PhysKit.localizeDecimals(out);
     if (out.kind !== kind) throw new Error("kind mismatch");
     const { kind: _k, template, sig, vals, ...q } = out;
     check(out, kind);
     const id = `cb-${VERSION}-${famId}-${kind}-${LV_CODE[mode]}-${seed.toString(36)}`;
-    const meta = { family: famId, mode, unit: F.unit, sub: F.sub, subs: F.subs, template: template || "main", sig: `${famId}|${kind}|${sig || norm(q.q || q.intro || "")}`, complexity: (F.complexity && F.complexity[mode]) || 2, answerFormat: F.answer, tags: F.tags, prereqs: F.prereqs };
+    const meta = { subject: F.subject || "math", family: famId, mode, unit: F.unit, sub: F.sub, subs: F.subs, template: template || "main", sig: `${famId}|${kind}|${sig || norm(q.q || q.intro || "")}`, complexity: (F.complexity && F.complexity[mode]) || 2, answerFormat: F.answer, tags: F.tags, prereqs: F.prereqs };
     const res = { ...q, id, topic: F.topicName || F.title, concepts: F.concepts, meta, hints: q.hints || [] };
     if (kind === "mc" && res.c) res.c = res.c.map((s) => (/^\\\(/.test(s) && !/\\displaystyle/.test(s) ? s.replace(/^\\\(/, "\\(\\displaystyle ") : s));
     if (kind === "nr" && !res.fmt) res.fmt = "Number";
@@ -224,37 +227,42 @@
   const shapeOf = (s) => norm(String(s)).replace(/-?\d+(\.\d+)?/g, "#").slice(0, 160);
 
   // ───────── history ─────────
+  // one history per subject: Physics never shares question history with Math
+  const HKEYS = { math: HKEY, physics: "campfire-prep.phys.qhist.v1" };
+  const hkey = (subject) => HKEYS[subject || "math"] || HKEY;
   const store = {
-    get() { try { const h = JSON.parse(root.localStorage.getItem(HKEY)); return h && Array.isArray(h.recent) ? h : { v: 1, recent: [] }; } catch { return { v: 1, recent: [] }; } },
-    set(h) { try { root.localStorage.setItem(HKEY, JSON.stringify(h)); } catch { /* storage off: selection still works, just without memory */ } },
+    get(subject) { try { const h = JSON.parse(root.localStorage.getItem(hkey(subject))); return h && Array.isArray(h.recent) ? h : { v: 1, recent: [] }; } catch { return { v: 1, recent: [] }; } },
+    set(h, subject) { try { root.localStorage.setItem(hkey(subject), JSON.stringify(h)); } catch { /* storage off: selection still works, just without memory */ } },
   };
-  function remember(qs) {
-    const h = store.get();
+  const subjectOf = (F) => F.subject || "math";
+  function remember(qs, subject) {
+    const h = store.get(subject);
     const now = Date.now();
     for (const q of qs) h.recent.push({ s: q.meta.sig, h: q.meta.family + "|" + q.meta.template, f: q.meta.family, u: q.meta.sub, m: q.meta.mode, t: now });
     h.recent = h.recent.slice(-600);
-    store.set(h);
+    store.set(h, subject);
   }
-  function exposure() {
-    const h = store.get(), by = {};
+  function exposure(subject) {
+    const h = store.get(subject), by = {};
     for (const e of h.recent) by[e.u] = (by[e.u] || 0) + 1;
     return by;
   }
 
   // ───────── selection ─────────
-  // opts: { subs: [subtopic ids] | null (all), concept?, mode, n, kinds?, rnd?, missed?: Set(sub), record?: true }
+  // opts: { subject?: "math" | "physics", subs: [subtopic ids] | null (all), concept?, families?: [ids], mode, n, kinds?, rnd?, missed?: Set(sub), record?: true }
   function select(opts) {
     adoptQuad(); adoptAuthored();
-    const mode = opts.mode, n = opts.n || 8, rnd = opts.rnd || Math.random;
+    const mode = opts.mode, n = opts.n || 8, rnd = opts.rnd || Math.random, subject = opts.subject || "math";
     const kinds = opts.kinds || ["mc", "nr", "wr"];
-    const inScope = (F) => !F.id.startsWith("nm") && F.modes.includes(mode) && F.kinds.some((k) => kinds.includes(k)) &&
+    const inScope = (F) => !F.id.startsWith("nm") && subjectOf(F) === subject && F.modes.includes(mode) && F.kinds.some((k) => kinds.includes(k)) &&
+      (!opts.families || opts.families.includes(F.id)) &&
       (opts.concept ? F.concepts.includes(opts.concept) : !opts.subs || F.subs.some((s) => opts.subs.includes(s)));
     const fams = FAMS.filter(inScope);
     if (!fams.length) return { items: [], unavailable: true, mode };
     const subsOf = (F) => (opts.subs ? F.subs.filter((s) => opts.subs.includes(s)) : [F.sub]);
     const bySub = new Map();
     for (const F of fams) for (const s of subsOf(F)) { if (!bySub.has(s)) bySub.set(s, []); bySub.get(s).push(F); }
-    const h = opts.history || store.get();
+    const h = opts.history || store.get(subject);
     const recentSigs = new Set(h.recent.map((e) => e.s));
     const famUse = {}; h.recent.slice(-120).forEach((e) => { famUse[e.f] = (famUse[e.f] || 0) + 1; });
     const exp = {}; h.recent.forEach((e) => { exp[e.u] = (exp[e.u] || 0) + 1; });
@@ -298,7 +306,7 @@
       const part = kind === "wr" ? got.parts[Math.floor(rnd() * got.parts.length)].key : null;
       out.push({ kind, q: got, part });
     }
-    if (opts.record !== false) remember(out.map((x) => x.q));
+    if (opts.record !== false) remember(out.map((x) => x.q), subject);
     return { items: out, mode, revisits, unavailable: false };
   }
 
@@ -316,10 +324,11 @@
       authoredQuestions: auth.reduce((a, F) => a + F.templates.length, 0),
       declaredTemplates: own.reduce((a, F) => a + F.templates.length, 0),
       familyFormatMode: FAMS.reduce((a, F) => a + F.kinds.length * F.modes.length, 0),
+      bySubject: FAMS.reduce((a, F) => { a[subjectOf(F)] = (a[subjectOf(F)] || 0) + 1; return a; }, {}),
     };
   }
 
-  const api = { VERSION, MODES, K, family, make, generate, byId, select, remember, exposure, history: () => store.get(), clearHistory: () => store.set({ v: 1, recent: [] }), familiesFor, stats, adoptQuad, shapeOf, norm, keyResponse, get FAMILIES() { adoptQuad(); adoptAuthored(); return FAMS; }, byFam: (id) => { adoptQuad(); adoptAuthored(); return byFam.get(id); }, rng };
+  const api = { VERSION, MODES, K, family, make, generate, byId, select, remember, exposure, history: (subject) => store.get(subject), clearHistory: (subject) => store.set({ v: 1, recent: [] }, subject), subjectOf, familiesFor, stats, adoptQuad, shapeOf, norm, keyResponse, get FAMILIES() { adoptQuad(); adoptAuthored(); return FAMS; }, byFam: (id) => { adoptQuad(); adoptAuthored(); return byFam.get(id); }, rng };
   root.Bank = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

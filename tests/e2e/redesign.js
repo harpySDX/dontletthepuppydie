@@ -35,7 +35,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   let p = await mk();
   await p.click("#btn-settings"); await p.waitForTimeout(150);
   ok("Settings popover opens from the puppy button", await vis(p, "#settings-pop") && (await p.getAttribute("#btn-settings", "aria-expanded")) === "true");
-  ok("Settings: 5 languages, 4 layouts, 3 themes", (await p.locator("#set-lang [data-lang]").count()) === 5 && (await p.locator("#set-layout [data-layout]").count()) === 4 && (await p.locator("#set-theme [data-theme-opt]").count()) === 3);
+  ok("Settings: 5 languages, 4 layouts, 12 themes", (await p.locator("#set-lang [data-lang]").count()) === 5 && (await p.locator("#set-layout [data-layout]").count()) === 4 && (await p.locator("#set-theme [data-theme-opt]").count()) === 12);
   await p.click('#set-lang [data-lang="fr"]'); await p.waitForTimeout(200);
   ok("Language switches the interface immediately (French)", (await p.getAttribute("html", "lang")) === "fr" && /Accueil/.test(await p.textContent("#main-nav")));
   await p.click('#set-layout [data-layout="studio"]'); await p.click('#set-theme [data-theme-opt="dark"]'); await p.waitForTimeout(150);
@@ -57,6 +57,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
 
   // ── focus layout: navigator becomes a popover in tests
   p = await mk({ seed: { "campfire-prep.ui.v1": { lang: "en", layout: "focus", theme: "light" } } });
+  await p.evaluate(() => { const k = "campfire-prep.prefs.v1"; const v = JSON.parse(localStorage.getItem(k) || "{}"); v.allowHints = true; localStorage.setItem(k, JSON.stringify(v)); }); // hints are opt-in (Test options); this part checks how many a Normal test allows once they're on
   await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-start"); await p.waitForTimeout(700);
   ok("Focus layout: question navigator hidden until asked for", !(await vis(p, "#navigator")) && await vis(p, "#btn-navpop"));
   await p.click("#btn-navpop"); await p.waitForTimeout(150);
@@ -92,6 +93,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
 
   // ── Challenging: one hint per question; Nightmare: none
   p = await mk();
+  await p.evaluate(() => { const k = "campfire-prep.prefs.v1"; const v = JSON.parse(localStorage.getItem(k) || "{}"); v.allowHints = true; localStorage.setItem(k, JSON.stringify(v)); }); 
   await p.click('#mode-track [data-mode="challenge"]'); await p.click("#btn-start"); await p.waitForTimeout(700);
   let chi = -1;
   for (let i = 0; i < 20 && chi < 0; i++) { await p.evaluate((i) => document.querySelectorAll("#nav-grid .nav-cell")[i].click(), i); await p.waitForTimeout(60); if (await vis(p, "#btn-hint") && !(await p.isDisabled("#btn-hint"))) chi = i; }

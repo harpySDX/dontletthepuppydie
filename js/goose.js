@@ -61,6 +61,8 @@
     ["sp-diag", "#splus .sp-diag"], ["sp-launch", "#splus .sp-launch"], ["sp-queue", "#splus .sp-queue-p"], ["sp-curric", "#splus .sp-curric"], ["sp-hist", "#splus .sp-hist-p"],
     ["navigator", "#screen-test .navigator"], ["test-info", "#screen-test .test-info"],
     ["tests-row", "#drills .tests-row"], ["course-top", "#course-body .course-top"],
+    ["ph-path", "#screen-phys section.ph-pathp"], ["ph-launch", "#screen-phys section.ph-launch"], ["ph-diag", "#screen-phys section.ph-diag"], ["ph-review", "#screen-phys section.ph-review"],
+    ["ph-recent", "#screen-phys section.ph-recent"], ["ph-tools", "#screen-phys section.ph-tools"], ["ph-formulas", "#screen-phys section.ph-formulas"],
   ];
 
   const rand = (a, b) => a + Math.random() * (b - a);

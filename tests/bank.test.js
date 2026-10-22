@@ -15,7 +15,7 @@ const BAD = /NaN|undefined|Infinity|\[object/;
 test("every generator family × format × level builds valid, self-consistent questions (40 seeds each)", () => {
   let combos = 0;
   for (const F of own) {
-    assert.ok(F.subs.length && F.subs.every((s) => SUB_IDS.has(s)), `${F.id} curriculum ids`);
+    if (F.subject !== "physics") assert.ok(F.subs.length && F.subs.every((s) => SUB_IDS.has(s)), `${F.id} curriculum ids`); // physics ids are checked in physics.test.js
     assert.ok(F.templates && F.templates.length, `${F.id} declares its templates`);
     for (const kind of F.kinds) for (const mode of F.modes) {
       combos++;
