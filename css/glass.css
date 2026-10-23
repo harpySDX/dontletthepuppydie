@@ -1178,3 +1178,12 @@ body.touring #tutor { visibility: hidden; }
 .mp-pt-opts .segmented { justify-self: start; }
 .sp-topic .mp-skill { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; margin: 0; font-size: 0.8rem; color: var(--muted); }
 .sp-topic .segmented, .mp-pt-opts .segmented { flex-wrap: nowrap; }
+
+/* ───────── navigation: the four destinations stay visible on wide screens (no hidden menu) ───────── */
+@media (min-width: 900px) {
+  .island.pinned .main-nav { max-width: 640px; opacity: 1; visibility: visible; transition: none; }
+  .island.pinned .island-chev { display: none; }
+}
+/* Home: Recent activity sits under the stats now that Quick actions are gone */
+.act-panel { padding: 16px; }
+.goals-card .card-head { margin-bottom: 8px; }

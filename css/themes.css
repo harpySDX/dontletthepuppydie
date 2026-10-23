@@ -2,6 +2,80 @@
 
 /* Each block is a complete token set; html[data-tone] is set by the app so tone-specific rules (dialogs, overlays) follow. */
 
+:root[data-theme="cafe"] {
+  color-scheme: dark;
+  --bg: #16100b;
+  --bg-tint-1: rgba(184, 145, 63, 0.2);
+  --bg-tint-2: rgba(111, 138, 99, 0.13);
+  --bg-tint-3: rgba(107, 47, 34, 0.1);
+  --sunken: #130e09;
+  --surface: #241a13;
+  --elevated: #30261f;
+  --hover: #36291b;
+  --glass: rgba(36, 26, 19, 0.6);
+  --glass-strong: rgba(36, 26, 19, 0.88);
+  --glass-border: rgba(243, 233, 214, 0.12);
+  --glass-rim: linear-gradient(135deg, rgba(212, 172, 94, 0.3), rgba(36, 26, 19, 0.08) 45%, rgba(163, 187, 149, 0.18));
+  --line: #41372e;
+  --line-soft: rgba(243, 233, 214, 0.12);
+  --line-strong: #52483e;
+  --ink: #f3e9d6;
+  --muted: #cdbb9f;
+  --faint: #9e8e78;
+  --accent: #d4ac5e;
+  --accent-strong: #b2904f;
+  --accent-soft: rgba(212, 172, 94, 0.14);
+  --accent-line: rgba(212, 172, 94, 0.4);
+  --accent-ink: #1d1309;
+  --violet: #a3bb95;
+  --violet-soft: rgba(163, 187, 149, 0.15);
+  --ember: #d4ac5e;
+  --ember-2: #e1c58e;
+  --ember-ink: #1d1309;
+  --ember-soft: rgba(212, 172, 94, 0.14);
+  --good: #9fd08f;
+  --mid: #e6c47c;
+  --bad: #f2957f;
+  --good-soft: rgba(159, 208, 143, 0.13);
+  --mid-soft: rgba(230, 196, 124, 0.13);
+  --bad-soft: rgba(242, 149, 127, 0.13);
+  --good-ink: #cae5c1;
+  --mid-ink: #f0dcb0;
+  --bad-ink: #f8c5b9;
+  --on-good: #0d0a07;
+  --on-bad: #0d0a07;
+  --ice: #ddbd7e;
+  --paper: #1f1710;
+  --paper-line: #342c24;
+  --paper-ink: #f5edde;
+  --paper-muted: #cdbb9f;
+  --sheet-2: #281e14;
+  --sheet-3: #2f2417;
+  --sheet-line: #383028;
+  --tag-bg: rgba(212, 172, 94, 0.16);
+  --tag-ink: #e5cd9e;
+  --graph-bg: #1c150f;
+  --graph-grid: #383028;
+  --graph-grid-minor: #2c241c;
+  --graph-axis: #cdbb9f;
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 30px -16px rgba(0, 0, 0, 0.7);
+  --shadow-2: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+  --shadow-float: 0 1px 0 rgba(212, 172, 94, 0.08) inset, 0 24px 60px -18px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(212, 172, 94, 0.08);
+  --rim: inset 0 1px 0 rgba(212, 172, 94, 0.1), inset 0 0 0 1px rgba(212, 172, 94, 0.07);
+  --fig-path: #d4ac5e;
+  --fig-curve: #d4ac5e;
+  --fig-ball: #d4ac5e;
+  --fig-comp: #a3bb95;
+  --fig-vec: #f3e9d6;
+  --fig-mark: #e6c47c;
+  --th-a: #d4ac5e;
+  --th-b: #a3bb95;
+  --th-c: #16100b;
+  --th-d: #241a13;
+}
+
+.th-card[data-theme-opt="cafe"] { --pv-bg: #16100b; --pv-surface: #241a13; --pv-ink: #f3e9d6; --pv-muted: #cdbb9f; --pv-accent: #d4ac5e; --pv-accent-ink: #1d1309; --pv-second: #a3bb95; --pv-ember: #d4ac5e; --pv-line: #41372e; }
+
 :root[data-theme="cinnamon"] {
   color-scheme: light;
   --bg: #f5ebe1;

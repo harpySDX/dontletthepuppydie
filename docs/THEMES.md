@@ -1,12 +1,14 @@
 # Themes
 
-Settings → Theme offers twelve themes. Each is a complete set of colour tokens, so every screen — Math and Physics,
+Settings → Theme offers thirteen themes; **Study Café** is the default. Settings → Accent colour lays one of nine
+accents over any theme (see docs/CAFE.md). Each is a complete set of colour tokens, so every screen — Math and Physics,
 all four layouts, the island, dialogs, the calculator, the scratchpad, graphs and the physics simulations — follows
 the choice. Switching is live, saved on this device (`campfire-prep.ui.v1` → `theme`), and applied in `<head>`
 before the first paint, so there is no flash on reload.
 
 | Theme | Tone | Character |
 |---|---|---|
+| Study Café | dark | the default: espresso and walnut, parchment text, brass accent, sage secondary |
 | Light Glass | light | the original: bright frosted glass on cool blue |
 | Dark Glass | dark | the original dark: deep navy glass |
 | System | follows the OS | Light Glass by day, Dark Glass at night; follows live OS changes |
@@ -27,7 +29,7 @@ what you picked.
 
 - Light Glass, Dark Glass and System are defined in `css/glass.css` (unchanged apart from small contrast fixes:
   the light accent and both faint-text colours were darkened/lightened to meet WCAG AA).
-- The nine new themes are generated: `tools/themes.js` holds one short palette per theme (background, surface,
+- The ten generated themes (Study Café and the nine below it) are generated: `tools/themes.js` holds one short palette per theme (background, surface,
   text, muted text, accent + text-on-accent, a secondary hue, the primary-action colour, good/mid/bad) and derives
   the full token set — surfaces, glass, borders, text levels, accent states, feedback colours and their
   text-on-colour, paper (question sheet, calculator display, scratchpad), graph colours, physics figure colours
@@ -38,6 +40,15 @@ what you picked.
   a button, and four swatches (accent, secondary, primary action, surface).
 - The scratchpad's pencil is drawn in the theme's paper ink and redraws on theme change, so pencil notes stay
   readable on dark paper.
+
+## Over the café
+
+The 3D café behind the interface does not change with the theme; the interface does. Over the room, panels use the
+theme's own `--surface` at about 80 % opacity with a backdrop blur, and a veil mixed from the theme's `--bg` sits
+between the room and the interface (lighter for light themes), so text placed directly on the room keeps its
+contrast. An accent colour (Settings → Accent colour) overrides the accent and primary-action tokens with a shade
+derived for the current theme (at least 4.6:1 on its surfaces). During a test the café is hidden and the theme's
+plain background is used.
 
 ## Adding a theme
 

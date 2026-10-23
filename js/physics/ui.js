@@ -1,10 +1,11 @@
 /*
- * PHYSICS UI — the Physics 11 workspace inside the existing app shell (one screen, #screen-phys, with views):
- *   home      dashboard for every layout (Studio+ = a physics workbench with the Projectile Explorer embedded)
- *   learn     lessons (computed worked examples, quick checks) and the formula reference
- *   practice  launcher at the app's saved difficulty, course map with coverage statuses, diagnostics, review queue
- *   lab       Projectile Explorer, Motion Graph Lab, Vector visualizer (js/physics/tools.js)
- *   run       the physics question runner (multi-part, unit-aware, hints, worked solutions, results by skill)
+ * PHYSICS UI — the parts of Physics 11 that have their own screen (#screen-phys):
+ *   learn     Lessons (computed worked examples, quick checks) · Formulas · Labs (optional: Projectile Explorer,
+ *             Motion Graph Lab, Vector visualizer — js/physics/tools.js; never a step before a test)
+ *   run       the practice runner (multi-part, unit-aware, hints, worked solutions, results by skill)
+ * Home, Practice (By topic · Whole course) and Progress (Overview · Mistakes & review) are the SHARED screens in
+ * js/app.js; js/physics/home.js fills them, and this module provides the course map, diagnostics and review panels and
+ * handles clicks inside Physics content anywhere (.phys-host).
  * Physics data is stored apart from Math: records "campfire-prep.phys.practice.v1", question history
  * "campfire-prep.phys.qhist.v1" (Bank), view state "campfire-prep.phys.prefs.v1". Nothing here reads or writes Math data.
  */
@@ -85,9 +86,13 @@
 
   // ───────── shell ─────────
   function root() { return $("#phys-root"); }
-  const VIEW_NAV = { home: "home", learn: "library", practice: "practice", lab: "studyroom", run: "practice" };
+  // Physics has one screen of its own, Learn (lessons · formulas · optional labs), plus the practice runner. Home,
+  // Practice and Progress are the shared screens (js/app.js), filled by js/physics/home.js.
+  const VIEW_NAV = { learn: "bar", run: "bar" }; // lessons, formulas, labs and practice runs all belong to The Bar
+  const SHARED = { home: "home", practice: "practice", course: "course", progress: "progress", review: "review" };
   function open(v, arg) {
-    if (v === "home") { if (run && run.active) stopRun(); return A.goHome(); } // Physics uses the shared home screen
+    if (SHARED[v]) { if (run && run.active) stopRun(); return A.go(SHARED[v]); }
+    if (v === "lab") { v = "learn"; arg = { ...(arg || {}), ltab: "labs" }; }
     if (run && v !== "run" && run.active) { stopRun(); }
     view = v;
     A.show("phys");
@@ -101,9 +106,7 @@
     unmountTool();
     el.dataset.view = view;
     if (view === "run" && run) return renderRun();
-    if (view === "learn") el.innerHTML = renderLearn();
-    else if (view === "practice") el.innerHTML = renderPractice();
-    else if (view === "lab") el.innerHTML = renderLab();
+    el.innerHTML = renderLearn();
     afterRender();
   }
   function afterRender() {
@@ -112,68 +115,6 @@
     if (host && window.PhysTools) mounted = window.PhysTools.mount(host.dataset.toolHost, host, { compact: host.dataset.compact === "1", t: tr, renderMath: rm });
   }
   const levelSeg = (cur) => `<div class="segmented ph-levels" role="radiogroup" aria-label="${esc(tr("ph.level"))}">${LEVELS.map((m) => `<button type="button" role="radio" data-ph-level="${m}" aria-checked="${m === cur}" class="${m === cur ? "active" : ""}">${esc(tr("mode." + m))}</button>`).join("")}</div>`;
-  const subtopicOptions = (cur) => {
-    const cov = C().coverage().filter((c) => c.families.length);
-    return C().UNITS.map((u) => { const rows = cov.filter((c) => c.unit === u.id); return rows.length ? `<optgroup label="${esc(loc(u.title))}">${rows.map((c) => `<option value="${c.id}" ${c.id === cur ? "selected" : ""} ${c.modes.includes(level()) ? "" : "disabled"}>${esc(loc(c.title))}${c.modes.includes(level()) ? "" : " — " + esc(tr("ph.notAtLevel"))}</option>`).join("")}</optgroup>` : ""; }).join("");
-  };
-  // The launcher follows the selected difficulty exactly like the Math home: Simple = guided practice;
-  // Normal / Challenging / Nightmare = a real Physics test in the shared test engine (js/app.js + js/physics/test.js).
-  const T = () => window.PhysTest;
-  const TEST = (lv) => lv !== "simple" && !!T();
-  function resumeCard() {
-    if (!A.savedSession) return "";
-    A.finishExpired && A.finishExpired();
-    const s = A.savedSession();
-    if (!(s && s.items && s.subject === "physics")) return "";
-    const answered = s.items.filter((it) => { const q = window.Bank.byId(it.qid); return q && q.parts.every((p) => T().answered(p, it.responses[p.key])); }).length;
-    return `<div class="resume-card glass ph-resume${s.paused ? " paused" : ""}"><div><span class="resume-kicker">${s.paused ? "⏸ " : ""}${esc(tr("home.resumeTitle"))} · ${esc(tr("subject.physics"))} · ${esc(tr("mode." + s.level))}</span>
-      <span class="resume-meta">${esc(tr("home.left", { time: A.clock(A.timeLeftOf(s)), answered, total: s.items.length }))}</span></div>
-      <div class="resume-actions"><button class="btn btn-primary btn-sm" type="button" data-pt-resume>${esc(tr("home.resume"))}</button><button class="btn btn-link btn-sm" type="button" data-pt-discard>${esc(tr("home.discard"))}</button></div></div>`;
-  }
-  function testTopicSelect(lv, cur) {
-    const tops = T().topics(lv);
-    return `<select class="text-input" id="ph-test-topic"><option value="${T().MIX}" ${cur === T().MIX ? "selected" : ""} ${tops[0].ok ? "" : "disabled"}>${esc(tr("pt.mixAll"))}</option>${C().UNITS.map((u) => { const rows = tops.filter((t) => t.id !== T().MIX && t.unit === u.id && t.ok); return rows.length ? `<optgroup label="${esc(loc(u.title))}">${rows.map((t) => `<option value="${t.id}" ${t.id === cur ? "selected" : ""}>${esc(loc(t.title))}</option>`).join("")}</optgroup>` : ""; }).join("")}</select>`;
-  }
-  function launcher(compact) {
-    const p = prefs(), lv = level();
-    const icon = (A.MODE_ICON && A.MODE_ICON()[lv]) || "";
-    const head = `<span class="field-label">${esc(tr("ph.levelFixed"))}</span>${levelSeg(lv)}
-      <div class="ph-mode p-${lv}"><span class="mode-ico" aria-hidden="true">${icon}</span><div><h3>${esc(tr("pt.title." + lv))}</h3>${compact === "bench" ? "" : `<p>${esc(tr("pt.mode." + lv))}</p>`}</div></div>`;
-    const bench = compact === "bench";
-    if (!TEST(lv)) {
-      const cov = C().coverage(), cur = cov.find((c) => c.id === p.sub);
-      const ok = cur && cur.modes.includes(lv);
-      return `<div class="ph-launch-body" data-launch="guided">${resumeCard()}${head}
-        <ul class="mp-chips">${[1, 2, 3].map((k) => `<li>${esc(tr("pt.f.simple" + k))}</li>`).join("")}</ul>
-        <label class="ph-field"><span>${esc(tr("ph.topic"))}</span><select class="text-input" id="ph-sub">${subtopicOptions(p.sub)}</select></label>
-        <div class="ph-actions">
-          <button type="button" class="btn btn-primary" data-ph-start="sub" ${ok ? "" : "disabled"}>${esc(tr("mode.start.simple"))}</button>
-          <button type="button" class="btn btn-secondary" data-ph-start="mixed">${esc(tr("ph.mixed"))}</button>
-          ${compact ? "" : `<button type="button" class="btn btn-quiet" data-ph-start="diag">${esc(tr("ph.runDiag"))}</button>`}
-        </div>
-        ${ok ? "" : `<p class="faint small">${esc(tr("ph.notAtLevelNote", { mode: tr("mode." + lv) }))}</p>`}
-      </div>`;
-    }
-    const o = T().options(lv), hint = { normal: "pt.hints.normal", challenge: "pt.hints.challenge", nightmare: "pt.hints.nightmare" }[lv];
-    return `<div class="ph-launch-body" data-launch="test">${resumeCard()}${head}
-      <ul class="mp-chips"><li>${esc(tr("pt.f.len", { n: o.n, min: o.minutes }))}</li><li>${esc(tr(hint))}</li>${bench ? "" : `<li>${esc(tr("pt.f.results"))}</li>`}</ul>
-      ${bench ? `<div class="ph-actions"><button type="button" class="btn btn-primary" data-pt-start="${lv}">${esc(tr("pt.start." + lv))}</button><button type="button" class="btn btn-secondary" data-pt-options="${lv}">${esc(tr("mode.options"))}</button></div>` : ""}
-      <label class="ph-field"><span>${esc(tr("ph.topic"))}</span>${testTopicSelect(lv, o.topic)}</label>
-      <div class="ph-field"><span id="pt-n-l">${esc(tr("pt.count"))}</span><div class="segmented small-seg" role="radiogroup" aria-labelledby="pt-n-l">${T().COUNTS[lv].map((n) => `<button type="button" role="radio" data-pt-n="${n}" aria-checked="${n === o.n}" class="${n === o.n ? "active" : ""}">${n}</button>`).join("")}</div></div>
-      ${bench ? "" : `<div class="ph-actions">
-        <button type="button" class="btn btn-primary" data-pt-start="${lv}">${esc(tr("pt.start." + lv))}</button>
-        <button type="button" class="btn btn-secondary" data-pt-options="${lv}">${esc(tr("mode.options"))}</button>
-      </div>`}
-    </div>`;
-  }
-  function lessonPath() {
-    const D = diagnose(), rs = records();
-    return `<ol class="ph-path">${CT().LESSONS.map((l, i) => {
-      const fams = new Set(l.families), mine = rs.filter((r) => fams.has(r.family)), acc = mine.length ? Math.round((mine.reduce((a, r) => a + r.earned, 0) / mine.reduce((a, r) => a + r.max, 0)) * 100) : null;
-      const here = l.id === "phys.angled";
-      return `<li class="ph-step${here ? " here" : ""}"><button type="button" class="ph-step-btn" data-ph-lesson="${l.id}"><span class="ph-step-n">${i + 1}</span><span class="ph-step-t"><b>${esc(loc(l.title))}</b><small>${mine.length ? esc(tr("ph.answered", { n: mine.length })) + ` · <span class="sp-pct ${pctCls(acc)}">${acc}%</span>` : esc(tr("ph.notStarted"))}${here ? ` · <span class="ph-here">${esc(tr("ph.classHere"))}</span>` : ""}</small></span></button></li>`;
-    }).join("")}</ol>`;
-  }
   function diagPanel(compact) {
     const D = diagnose();
     if (!D.total) return `<p class="empty-note">${esc(tr("ph.diag.empty"))}</p>`;
@@ -197,9 +138,10 @@
   // ───────── learn: lessons + formula reference ─────────
   function renderLearn() {
     const p = prefs(), tab = sub.ltab || p.learnTab;
-    const tabs = `<div class="tabbar" role="tablist">${["lessons", "formulas"].map((k) => `<button type="button" role="tab" data-ph-ltab="${k}" aria-selected="${k === tab}" class="${k === tab ? "active" : ""}">${esc(tr("ph.learn." + k))}</button>`).join("")}</div>`;
-    const head = `<div class="page-head"><div><p class="eyebrow">${esc(tr("ph.kicker"))}</p><h1>${esc(tr("ph.learn.title"))}</h1></div></div><div class="prac-tabs">${tabs}</div>`;
+    const tabs = `<div class="tabbar" role="tablist" aria-label="${esc(tr("nav.learn"))}">${["lessons", "formulas", "labs"].map((k) => `<button type="button" role="tab" data-ph-ltab="${k}" aria-selected="${k === tab}" class="${k === tab ? "active" : ""}">${esc(tr("ph.learn." + k))}</button>`).join("")}</div>`;
+    const head = `<div class="page-head"><div><p class="eyebrow">${esc(tr("nav.learn"))}</p><h1>${esc(tr("ph.learn.title"))}</h1>${tab === "labs" ? `<p class="lead">${esc(tr("ph.labs.lead"))}</p>` : ""}</div></div><div class="prac-tabs">${tabs}</div>`;
     if (tab === "formulas") return head + renderFormulas(sub.formula);
+    if (tab === "labs") return head + renderLab();
     const lid = sub.lesson || p.lesson, les = CT().get(lid) || CT().LESSONS[0];
     const nav = `<nav class="ph-lnav glass" aria-label="${esc(tr("ph.learn.lessons"))}"><ol>${CT().LESSONS.map((l, i) => `<li><button type="button" class="${l.id === les.id ? "active" : ""}" data-ph-lesson="${l.id}" ${l.id === les.id ? 'aria-current="page"' : ""}><span class="ph-step-n">${i + 1}</span>${esc(loc(l.title))}</button></li>`).join("")}</ol></nav>`;
     return head + `<div class="ph-learn">${nav}<article class="ph-lesson glass panel">${renderLesson(les)}</article></div>`;
@@ -237,16 +179,7 @@
     </article>`).join("")}</div>`;
   }
 
-  // ───────── practice: launcher · course map · diagnostics · review ─────────
-  function renderPractice() {
-    const p = prefs(), tab = sub.tab || p.practiceTab;
-    const tabs = `<div class="tabbar" role="tablist">${["practise", "course", "diagnostics", "review"].map((k) => `<button type="button" role="tab" data-ph-tab="${k}" aria-selected="${k === tab}" class="${k === tab ? "active" : ""}">${esc(tr("ph.tab." + k))}</button>`).join("")}</div>`;
-    const head = `<div class="page-head"><div><p class="eyebrow">${esc(tr("ph.kicker"))}</p><h1>${esc(tr("ph.practice.title"))}</h1></div></div><div class="prac-tabs">${tabs}</div>`;
-    if (tab === "course") return head + renderCourse();
-    if (tab === "diagnostics") return head + `<div class="ph-two">${panel("ph-diag", "ph.diag", diagPanel(false))}${panel("ph-diag-run", "ph.diag.title", `<p>${esc(tr("ph.diag.explain"))}</p>${levelSeg(level())}<div class="ph-actions"><button type="button" class="btn btn-primary" data-ph-start="diag">${esc(tr("ph.runDiag"))}</button></div>`)}</div>`;
-    if (tab === "review") return head + panel("ph-review", "ph.review", reviewPanel());
-    return head + `<div class="ph-two">${panel("ph-launch", "ph.launch", launcher(false))}${panel("ph-pathp", "ph.path", lessonPath())}</div>`;
-  }
+  // ───────── course map (shown in the shared Practice › Whole course tab) ─────────
   function renderCourse() {
     const cov = C().coverage(), D = diagnose(), open = prefs().courseOpen, lv = level();
     const counts = { tested: 0, validation: 0, planned: 0, supplementary: 0 };
@@ -265,16 +198,16 @@
   }
 
   // ───────── lab ─────────
+  // optional labs (never part of starting a test)
   function renderLab() {
     const tool = sub.tool || prefs().tool;
-    const tabs = `<div class="tabbar" role="tablist">${["explorer", "graphs", "vector"].map((k) => `<button type="button" role="tab" data-ph-tool="${k}" aria-selected="${k === tool}" class="${k === tool ? "active" : ""}">${esc(tr("ph.tool." + k))}</button>`).join("")}</div>`;
-    return `<div class="page-head"><div><p class="eyebrow">${esc(tr("ph.kicker"))}</p><h1>${esc(tr("ph.lab.title"))}</h1><p class="lead">${esc(tr("ph.tool." + tool + ".d"))}</p></div></div><div class="prac-tabs">${tabs}</div>
-      <section class="glass panel ph-lab"><div class="ph-tool-host" data-tool-host="${tool}"></div></section>`;
+    const seg = `<div class="segmented ph-tools-seg" role="radiogroup" aria-label="${esc(tr("ph.tools"))}">${["explorer", "graphs", "vector"].map((k) => `<button type="button" role="radio" data-ph-tool="${k}" aria-checked="${k === tool}" class="${k === tool ? "active" : ""}">${esc(tr("ph.tool." + k))}</button>`).join("")}</div>`;
+    return `<section class="glass panel ph-lab"><div class="ph-lab-head">${seg}<p class="faint small">${esc(tr("ph.tool." + tool + ".d"))}</p></div><div class="ph-tool-host" data-tool-host="${tool}"></div></section>`;
   }
 
   // ───────── runner ─────────
   function startRun(opts) {
-    const lv = level();
+    const lv = opts.level && LEVELS.includes(opts.level) ? opts.level : level();
     let items, revisits = 0;
     if (opts.diag) {
       // one fresh question per tracked skill area, all at the chosen level
@@ -288,7 +221,7 @@
       revisits = got.revisits;
     }
     if (!items.length) return;
-    run = { active: true, id: "ph-" + Date.now().toString(36), items, i: 0, ans: items.map(() => ({})), order: {}, hints: items.map(() => 0), mode: lv, revisits, diag: !!opts.diag, back: view === "run" ? (run && run.back) || "practice" : view, opts, title: opts.title || "" };
+    run = { active: true, id: "ph-" + Date.now().toString(36), items, i: 0, ans: items.map(() => ({})), order: {}, hints: items.map(() => 0), mode: lv, revisits, diag: !!opts.diag, back: view === "run" && run ? run.back : document.body.dataset.screen === "phys" ? view : document.body.dataset.screen || "practice", opts, title: opts.title || "" };
     view = "run";
     A.show("phys"); A.markNav("practice", tr("ph.ctx.run"));
     render();
@@ -384,31 +317,19 @@
   }
 
   // ───────── events ─────────
+  // Clicks inside #phys-root, and inside Physics content shown on the shared screens (.phys-host)
   function onClick(e) {
-    const t = e.target.closest("button, [data-ph-ltab], [data-ph-tab]"); if (!t || !root() || !root().contains(t)) return;
+    const t = e.target.closest("button, [data-ph-ltab]"); if (!t || !(t.closest("#phys-root") || t.closest(".phys-host"))) return;
     const d = t.dataset;
-    if (d.phLevel) { A.setMode(d.phLevel); return render(); }
-    // Physics tests (shared engine)
-    if (d.ptStart) return A.startPhysTest(d.ptStart, T().options(d.ptStart));
-    if (d.ptOptions) return A.openPhysSetup(d.ptOptions);
-    if (d.ptN) { T().setOptions(level(), { n: Number(d.ptN) }); return render(); }
-    if (d.ptResume !== undefined) return A.resumeSaved();
-    if (d.ptDiscard !== undefined) { A.discardSaved().then(() => render()); return; }
-    if (d.ptAttempt) { const a = T().history().find((x) => x.id === d.ptAttempt); if (a) A.showResults(a, false); return; }
+    if (d.phLevel) { A.setMode(d.phLevel); return t.closest(".phys-host") ? A.rerender() : render(); }
     if (d.phLesson !== undefined) { setPrefs({ lesson: d.phLesson, learnTab: "lessons" }); sub = { lesson: d.phLesson, ltab: "lessons" }; return open("learn"); }
-    if (d.phTool) { setPrefs({ tool: d.phTool }); sub = { tool: d.phTool }; return open("lab"); }
+    if (d.phTool) { setPrefs({ tool: d.phTool, learnTab: "labs" }); sub = { tool: d.phTool, ltab: "labs" }; return open("learn"); }
     if (d.phFormula) { sub = { ltab: "formulas", formula: d.phFormula }; open("learn"); const f = document.getElementById("phf-" + d.phFormula); if (f) f.scrollIntoView({ block: "center" }); return; }
-    if (d.phGo) { sub = { tab: d.phTab, ltab: d.phLtab }; if (d.phTab) setPrefs({ practiceTab: d.phTab }); if (d.phLtab) setPrefs({ learnTab: d.phLtab }); return open(d.phGo); }
+    if (d.phGo) { if (d.phLtab) setPrefs({ learnTab: d.phLtab }); sub = { ltab: d.phLtab }; return open(d.phGo); }
     if (d.phLtab && view === "learn") { setPrefs({ learnTab: d.phLtab }); sub = { ...sub, ltab: d.phLtab }; return render(); }
-    if (d.phTab && view === "practice") { setPrefs({ practiceTab: d.phTab }); sub = { tab: d.phTab }; return render(); }
-    if (d.phStart) {
-      if (d.phStart === "diag") return startRun({ diag: true });
-      if (d.phStart === "mixed") return startRun({ subs: C().SUBS.filter((s) => s.unit === "PC").map((s) => s.id), n: 8 });
-      if (d.phStart === "pt-practice") return startRun({ subs: T().subsFor(T().options(level()).topic), n: 5 });
-      const sid = ($("#ph-sub") || {}).value || prefs().sub; setPrefs({ sub: sid }); return startRun({ subs: [sid], n: 5 });
-    }
-    if (d.phSubrun) { setPrefs({ sub: d.phSubrun }); return startRun({ subs: [d.phSubrun], n: 5 }); }
-    if (d.phFams) return startRun({ families: d.phFams.split(",").filter((f) => B().byFam(f)), n: 5 });
+    if (d.phStart === "diag") return startRun({ diag: true });
+    if (d.phSubrun) { setPrefs({ sub: d.phSubrun }); return startRun({ subs: [d.phSubrun], n: 5, level: d.level }); }
+    if (d.phFams) return startRun({ families: d.phFams.split(",").filter((f) => B().byFam(f)), n: 5, level: d.level });
     if (d.phCheck !== undefined && t.closest(".ph-check")) {
       const box = t.closest(".ph-check"), fb = box.nextElementSibling;
       for (const b of box.querySelectorAll(".choice")) { b.classList.remove("is-correct", "is-wrong"); }
@@ -423,20 +344,18 @@
     if (d.phHint !== undefined) { run.hints[run.i] = Math.min(run.items[run.i].hints.length, run.hints[run.i] + 1); return renderRun(); }
     if (d.phNext !== undefined) { run.i++; return renderRun(); }
     if (d.phAgain !== undefined) return startRun(run.opts);
-    if (d.phLeave !== undefined) { const back = run.back || "practice"; stopRun(); return open(back === "run" ? "practice" : back); }
+    if (d.phLeave !== undefined) { const back = run.back || "practice"; stopRun(); return open(back === "run" || back === "phys" ? "practice" : back); }
   }
   function onKey(e) {
     if (e.key !== "Enter" || !run || !e.target.matches || !e.target.matches(".ph-num")) return;
     e.preventDefault(); checkPart(e.target.dataset.phPart);
   }
-  function onChange(e) {
-    if (e.target.id === "ph-sub") { setPrefs({ sub: e.target.value }); render(); }
-    if (e.target.id === "ph-test-topic") { T().setOptions(level(), { topic: e.target.value }); render(); }
-  }
+
   document.addEventListener("toggle", (e) => { const d = e.target; if (d.dataset && d.dataset.phUnit && d.open) setPrefs({ courseOpen: d.dataset.phUnit }); }, true);
 
   window.PhysUI = {
-    init(api) { A = api; const r = root(); if (r) { r.addEventListener("click", onClick); r.addEventListener("keydown", onKey); r.addEventListener("change", onChange); } },
+    init(api) { A = api; document.addEventListener("click", onClick); const r = root(); if (r) r.addEventListener("keydown", onKey); },
+    courseHTML: () => renderCourse(), diagPanel, reviewPanel,
     open, render, startRun, stopRun,
     // read-only view of the question on screen (used by the browser tests to answer with the key)
     current() { return run && run.items[run.i] ? { id: run.items[run.i].id, i: run.i, n: run.items.length } : null; },

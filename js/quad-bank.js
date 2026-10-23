@@ -1126,15 +1126,19 @@
   }
 
   // test layouts (marks: WR 4/5/2/3/5 = 19, NR 5, MC 10 → 34, like the unit test)
+  // Simple: an easier assessment (not a tutorial) — foundational families at Simple values, shorter reasoning chains.
+  // WR 4/2/2/1 = 9, NR 5, MC 10 → 24 marks.
   const WR_SLOTS = {
+    simple: [["readgraph"], ["vform"], ["sketch", "transform"], ["zfactored"]],
     normal: [["readgraph"], ["cts"], ["sketch", "eqfromgraph"], ["solve", "zvertex", "fromroots_n"], ["projectile", "optimize"]],
     challenge: [["readgraph", "table"], ["cts"], ["sketch", "eqfromgraph"], ["solve", "zvertex"], ["projectile", "optimize"]],
   };
-  const NR_POOL = { normal: ["coeffs", "axis", "vstd", "maxmin", "yint", "disc", "mirror", "vform"], challenge: ["axis", "vstd", "maxmin", "yint", "disc", "mirror", "table", "coeffs"] };
-  const MC_POOL = { normal: ["identify", "direction", "width", "vform", "axis", "vstd", "features", "matchgraph", "graphtoeq", "transform", "predict", "readgraph", "zfactored", "count", "yint", "compare", "fixerror", "cts", "maxmin", "solve"],
+  const NR_POOL = { simple: ["coeffs", "axis", "maxmin", "yint", "mirror", "vform"], normal: ["coeffs", "axis", "vstd", "maxmin", "yint", "disc", "mirror", "vform"], challenge: ["axis", "vstd", "maxmin", "yint", "disc", "mirror", "table", "coeffs"] };
+  const MC_POOL = { simple: ["identify", "coeffs", "direction", "vform", "axis", "maxmin", "features", "matchgraph", "graphtoeq", "transform", "readgraph", "yint", "zfactored", "count"],
+    normal: ["identify", "direction", "width", "vform", "axis", "vstd", "features", "matchgraph", "graphtoeq", "transform", "predict", "readgraph", "zfactored", "count", "yint", "compare", "fixerror", "cts", "maxmin", "solve"],
     challenge: ["identify", "direction", "width", "vform", "vstd", "features", "matchgraph", "graphtoeq", "transform", "predict", "zfactored", "count", "compare", "fixerror", "cts", "solve", "axis", "coeffs"] };
   function buildTest(lv, rnd = Math.random) {
-    const L = lv === "challenge" ? "challenge" : "normal";
+    const L = lv === "challenge" || lv === "simple" ? lv : "normal";
     const wr = WR_SLOTS[L].map((opts, i) => {
       let famId = opts[Math.floor(rnd() * opts.length)];
       if (famId === "fromroots_n") famId = "fromroots";

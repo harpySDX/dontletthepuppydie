@@ -56,8 +56,7 @@
 
   // Movable panels (never: settings, navigation, the question card, answer inputs, dialogs, Goose controls)
   const PANELS = [
-    ["topic", "#topic-card"], ["activity", "#dash .dash-row > section:nth-child(1)"], ["goals", "#dash .dash-row > section:nth-child(2)"],
-    ["quick", "#dash .quick"], ["stats", "#stats-panel"], ["concepts", "#studio-concepts"],
+    ["topic", "#topic-card"], ["subjects", "#hub-subjects"], ["tiles", "#dash .hub-tiles"],
     ["sp-diag", "#splus .sp-diag"], ["sp-launch", "#splus .sp-launch"], ["sp-queue", "#splus .sp-queue-p"], ["sp-curric", "#splus .sp-curric"], ["sp-hist", "#splus .sp-hist-p"],
     ["navigator", "#screen-test .navigator"], ["test-info", "#screen-test .test-info"],
     ["tests-row", "#drills .tests-row"], ["course-top", "#course-body .course-top"],

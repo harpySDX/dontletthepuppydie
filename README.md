@@ -1,6 +1,8 @@
 # DontLetThePuppyDie — Pre-Calc 11
 
-A study app for Pre-Calculus 11, now on **quadratic functions and graphing**. It has generated, exactly-checked practice at four difficulties, unit-test-style timed tests, a Concept Library with a formula reference, a floating calculator and scratchpad, and study rooms. The look is "liquid glass" (cool whites, icy blues, a little violet), with light, dark and system themes. Everything runs in the browser with no account; your data stays on your device.
+A study app for Pre-Calculus 11 (quadratic functions and graphing) and Physics 11 (projectile motion), set in **The Study Café**: a 3D boutique café with dark-academia styling behind translucent panels. It has generated, exactly-checked tests at four difficulties, recommended practice from your own answers, diagnostics, a Concept Library with a formula reference, a floating calculator and scratchpad, and study rooms. Thirteen themes and nine accent colours. Everything runs in the browser with no account; your data stays on your device.
+
+The café, The Bar, the home screen, difficulty levels, themes and accent colours: [`docs/CAFE.md`](docs/CAFE.md).
 
 What changed in this redesign, how it's built, and what's still unfinished: [`docs/REDESIGN.md`](docs/REDESIGN.md).
 The question engine and the full BC Pre-Calculus 11 course map (with the audit and measured results): [`docs/ENGINE.md`](docs/ENGINE.md).
@@ -9,11 +11,18 @@ Goose Mode and the kettle/oxygen rebalance: [`docs/GOOSE_MODE.md`](docs/GOOSE_MO
 
 ## Getting around
 
-- **The island** (top centre) is the main navigation. Select it to open **Home · Practice · Concepts · Study Room**. It closes with <kbd>Esc</kbd> or a click outside, arrow keys move between destinations, and during a test it turns into the test bar (mode, progress, timer, Pause, Exit).
+- **The island** (top centre) is the main navigation, the same destinations in Math and Physics: **Home · Tests · Game · The Bar · Diagnostics** (on the café home the tiles and a quiet *Visit The Bar* button take their place) (see [`docs/NAVIGATION.md`](docs/NAVIGATION.md)). On wide screens they are always visible; on narrow screens select the island to open them, and <kbd>Esc</kbd> or a click outside closes it. Arrow keys move between destinations. During a test it turns into the test bar (mode, progress, timer, Pause, Exit) and nothing else.
+  - **Home** (where the app opens; no start screen): both subjects (topics practised, next up), Recommended Practice, and three destinations: **Game · Tests · Diagnostics**. It fits one desktop screen. The Bar is its own page, reached from *Visit The Bar* in the top bar, with *Back to the café* to return.
+  - **Game:** optional play, off by default: the campfire minigame (opens Test options with it switched on; the test is marked as usual) and Goose Mode. Nothing game-like starts on its own.
+  - **Take a Test:** subject → difficulty → Start or Test options.
+  - **The Bar:** topic practice (Guided / Practise at any level), practice sets for the whole course, lessons, the formula sheet, the Study Room (Math) and optional labs (Physics), with a topic search.
+  - **Diagnostics:** *Overview* (stats, skills, goals, history) · *Mistakes & review* · *Study plan* (Math). A badge shows reviews due.
 - **The puppy button** (right of the island) opens **Settings**:
   - **Language:** English, Français, Español, Deutsch, 简体中文. This covers the interface; lesson and question text is still English (see the docs for the full list).
+  - **Accent colour:** the theme's own or Brass, Sage, Terracotta, Oxblood, Plum, Teal, Cobalt, Rose, adjusted per theme to stay readable.
+  - **Café scene:** *Photo* (default: a photograph of a sunlit café, `assets/cafe.jpg`, with a slow drift unless reduced motion is on), *3D room* (the procedural three.js room) or *Plain* (no backdrop). Hidden during tests; the interface never depends on it.
   - **Layout:** *Balanced*, *Focus* (one column; the question list becomes a popover), *Studio* (wider, with a side panel of test info and your concepts) or *Studio+* (Home becomes a full-screen workspace: diagnostics, quick launcher, curriculum overview, review queue, history and tools — all from your own records).
-  - **Theme:** Light glass, Dark glass or System.
+  - **Theme:** thirteen themes, Study Café by default (see Themes below).
 
   - **Gameplay → Goose Mode** (Normal, Challenging, Nightmare): no puppy to keep alive — a goose instead, with random disruptive events every ~30 s and panels it steals (drag them back; *Reset layout* and *Turn off* are always on the Goose bar). Not a difficulty, and off on Simple.
 
@@ -21,20 +30,25 @@ Goose Mode and the kettle/oxygen rebalance: [`docs/GOOSE_MODE.md`](docs/GOOSE_MO
 
 ## Home
 
-- A **difficulty carousel** with exactly four modes: **Simple**, **Normal**, **Challenging**, **Nightmare**. Selecting a card only *previews* it (what it's for, how hints work, an example question you can re-roll). Nothing starts until you press the start button.
-  - **Simple:** guided practice, one skill at a time, step-by-step hints, instant feedback, untimed.
+- **Recommended practice:** the most useful topic to practise next, picked from your own answers, with the reason and a Start practice button. With no evidence yet it offers a baseline test (Physics: the eight-question diagnostic) instead of guessing.
+- **Tests** (its own page, from the tile or the top bar): choose Pre-Calculus 11 or Physics 11, then one of exactly four difficulties: **Simple**, **Normal**, **Challenging**, **Nightmare**. Selecting a card only *previews* it (length, time, hints, an example question you can re-roll). Nothing starts until you press Start; Test options sets time, topic, length, hints and group tests. Every difficulty is a marked assessment:
+  - **Simple:** an easier test: 24 marks, 40 minutes, foundational questions with friendlier values and shorter reasoning. Answered on your own and marked at the end. (Guided, step-by-step practice is in The Bar.)
   - **Normal:** a 34-mark, 60-minute test laid out like the unit test (5 written response · 5 numerical response · 10 multiple choice). Step hints are available and noted in your review, never penalised.
   - **Challenging:** the same layout, harder (fractions, disguised forms, traps). One strategy hint per question.
   - **Nightmare:** one connected gauntlet of five stages about a single function. No hints, exact answers only. (This replaces the three radicals-era tiers.)
-- Recent activity, goals, quick actions and your stats. **Every number on Home comes from your own saved work**; a first-time visitor sees empty states, not sample figures.
+- **Subject cards:** the share of each course's topics you've practised and what's next. **Every number on Home comes from your own saved work**; a first-time visitor sees empty states, not sample figures.
 
-## Practice
+## The Bar
 
-- **Skills:** every quadratics concept with Simple / Normal / Challenging drills and a link to its lesson, plus the three full tests. A level a concept doesn't have is disabled, never swapped for another.
+- **Topic practice / Skills:** every quadratics concept with Simple / Normal / Challenging drills and a link to its lesson. (Full tests start from Home's difficulty cards, so they aren't repeated here.) A level a concept doesn't have is disabled, never swapped for another.
 - **Whole course:** the BC Pre-Calculus 11 course as units A–I and 69 subtopics (real numbers, exponents, radicals, factoring, rational expressions, quadratics, inequalities, trigonometry, financial literacy). Pick a level once — questions stay at exactly that level — then practise a subtopic, mix a unit, or run a 20-question full-course review. Coverage is computed from the question bank and shown next to your own results.
-- **Review:** spaced repetition and the Mistake Notebook.
+- **Study Room:** group practice with codes (Math).
+
+## Diagnostics
+
+- **Overview:** test stats and trend, goals, what to work on, topic mastery and full test history (older radicals-unit attempts, including Tim's Test and the old Nightmare tiers, are still listed).
+- **Mistakes & review:** spaced repetition and the Mistake Notebook.
 - **Study plan:** next steps, plans, the exam planner and your study files.
-- **Progress:** test stats and trend, what to work on, topic mastery and full test history (older radicals-unit attempts, including Tim's Test and the old Nightmare tiers, are still listed).
 
 ## Questions
 
@@ -100,7 +114,7 @@ Everything works without an account, and your data stays in your browser.
 
 How it is built, the security and privacy model, and what's tested: [`docs/REDESIGN.md`](docs/REDESIGN.md) (this redesign), [`docs/LEARNING_PLATFORM.md`](docs/LEARNING_PLATFORM.md) and [`docs/V8_REDESIGN.md`](docs/V8_REDESIGN.md) (earlier versions).
 
-No build step and no dependencies to install. It's plain HTML, CSS and JavaScript. KaTeX, which renders the math, is included in `vendor/`.
+No build step and no dependencies to install. It's plain HTML, CSS and JavaScript. KaTeX, which renders the math, and three.js r149 (MIT, the optional 3D café room, loaded only when that scene is chosen) are included in `vendor/`.
 
 ## Exam-first tests
 
@@ -113,15 +127,17 @@ same home screen and test screen. See [docs/EXAM_MODE.md](docs/EXAM_MODE.md).
 A second subject, switched from the Dynamic Island (Math ⇄ Physics). Projectile motion is built in depth — 17
 question families at four fixed difficulty levels, eight lessons, a formula reference, a Projectile Explorer, a
 Motion Graph Lab and a vector visualizer — with its own diagnostics, review queue and course map. Difficulty works
-as in Math: Simple is guided practice; Normal, Challenging and Nightmare are real timed Physics tests in the same test
-engine (options, results, review). Settings are
+as in Math: Simple, Normal, Challenging and Nightmare are real timed Physics tests in the same test engine (options,
+results, review); guided practice and the labs are in The Bar. Settings are
 shared; learning data is kept separate. Everything else in the BC Physics 11 curriculum is listed honestly as
 planned. See [docs/PHYSICS.md](docs/PHYSICS.md).
 
 ## Themes
 
-Twelve themes in Settings: Light Glass, Dark Glass, System, Cinnamon, Blush, Galaxy, Arctic, Beach, Halloween,
-Christmas, Graphite and Lime. Seasonal themes are never switched on automatically. See [docs/THEMES.md](docs/THEMES.md).
+Thirteen themes in Settings: Study Café (the default), Light Glass, Dark Glass, System, Cinnamon, Blush, Galaxy, Arctic,
+Beach, Halloween, Christmas, Graphite and Lime, plus an accent colour on top of any of them. The café room stays the
+same; the theme and accent colour every panel, button, highlight and progress bar. Seasonal themes are never switched
+on automatically. See [docs/THEMES.md](docs/THEMES.md) and [docs/CAFE.md](docs/CAFE.md).
 
 ## Run it locally
 

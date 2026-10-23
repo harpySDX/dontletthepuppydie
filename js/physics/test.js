@@ -16,10 +16,11 @@
 (function () {
   "use strict";
   const KEYS = { history: "campfire-prep.phys.history.v1", practice: "campfire-prep.phys.practice.v1", prefs: "campfire-prep.phys.prefs.v1" };
-  const TEST_LEVELS = ["normal", "challenge", "nightmare"];
+  // Simple is an easier assessment (accessible values, shorter chains), not the guided runner
+  const TEST_LEVELS = ["simple", "normal", "challenge", "nightmare"];
   // defaults per level: number of questions and minutes (both can be changed in Test options)
-  const DEFAULTS = { normal: { n: 6, minutes: 40 }, challenge: { n: 6, minutes: 50 }, nightmare: { n: 4, minutes: 50 } };
-  const COUNTS = { normal: [4, 6, 8, 10], challenge: [4, 6, 8, 10], nightmare: [3, 4, 5] };
+  const DEFAULTS = { simple: { n: 6, minutes: 30 }, normal: { n: 6, minutes: 40 }, challenge: { n: 6, minutes: 50 }, nightmare: { n: 4, minutes: 50 } };
+  const COUNTS = { simple: [4, 6, 8, 10], normal: [4, 6, 8, 10], challenge: [4, 6, 8, 10], nightmare: [3, 4, 5] };
   // Nightmare draws on the families whose Nightmare instances are genuinely multi-step: chained parts, inverse
   // problems, unequal heights, impact direction, error analysis and mixed scenarios.
   const NIGHTMARE_FAMS = ["ph_multistep", "ph_mixed", "ph_inverse", "ph_angled_diff", "ph_impact", "ph_downward", "ph_error", "ph_velocity_at", "ph_horizontal"];
@@ -68,6 +69,8 @@
   // lists the families that may fill it; slots repeat in order for longer tests. (Balancing over subtopics instead
   // gave conceptual multiple choice about a sixth of every test, which made tests easier than intended.)
   const BLUEPRINT = {
+    simple: [["ph_horizontal", "ph_vertical"], ["ph_components", "ph_units"], ["ph_angled_same", "ph_velocity_at"], ["ph_concepts", "ph_graphs", "ph_equations"], ["ph_vertical", "ph_horizontal"], ["ph_angled_same", "ph_angled_diff"],
+      ["ph_velocity_at", "ph_components"], ["ph_units", "ph_equations"], ["ph_horizontal", "ph_angled_same"], ["ph_vertical", "ph_graphs"]],
     normal: [["ph_horizontal", "ph_vertical"], ["ph_angled_same", "ph_velocity_at", "ph_components"], ["ph_concepts", "ph_graphs", "ph_equations"], ["ph_angled_diff", "ph_downward"], ["ph_impact", "ph_inverse", "ph_multistep"], ["ph_angled_same", "ph_angled_diff", "ph_horizontal"],
       ["ph_vertical", "ph_velocity_at", "ph_downward"], ["ph_units", "ph_error", "ph_insufficient"], ["ph_multistep", "ph_mixed"], ["ph_horizontal", "ph_angled_diff"]],
     challenge: [["ph_horizontal", "ph_angled_same"], ["ph_angled_diff", "ph_downward"], ["ph_error", "ph_insufficient", "ph_graphs"], ["ph_inverse"], ["ph_multistep", "ph_mixed"], ["ph_impact", "ph_velocity_at", "ph_vertical"],

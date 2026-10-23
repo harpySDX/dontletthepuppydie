@@ -11,8 +11,9 @@ The build focuses on **projectile motion**, where the class currently is (diagon
 
 - The Dynamic Island has a subject switcher (Math ⇄ Physics), a menu of two radio items; Escape closes it.
 - The choice is remembered (`campfire-prep.subject.v1`) and restored on the next visit.
-- In Physics the island's Library and Study Room buttons become **Lessons** and **Lab**; Home, Practice and Progress
-  open the Physics equivalents (Progress → the diagnostics tab).
+- The island is the same in both subjects (Home · Practice · Learn · Progress; see docs/NAVIGATION.md). In Physics,
+  Practice shows Physics skill cards and the course map, Learn opens Lessons / Formula reference / **Labs (optional)**,
+  and Progress shows Physics stats, diagnostics, goals, the diagnostic run, test history and the review queue.
 - Switching while a practice run is open (Math or Physics) asks first; "Stay" keeps the run exactly as it was.
   A saved Math test stays saved — a note says so when you return to Math.
 - A Math lesson link followed while in Physics switches to Math (it was a request for that lesson).
@@ -34,15 +35,15 @@ states say so.
 
 | Level | Physics workflow (same as Math) |
 |---|---|
-| Simple | guided practice in the Physics runner: step-by-step scaffold, hints, part-by-part instant feedback, worked solution. Not timed. |
+| Simple | a **real test** in the shared engine at Simple level: 6 questions, 30 minutes by default, one- and two-step problems with friendly numbers, hints only if allowed. (Guided practice with step-by-step scaffolds is in The Bar.) |
 | Normal | a **real test** in the shared test engine: timer, pause, navigator, flags, hints when asked, calculator and scratchpad, campfire / Goose rules, submit, marks, results and review |
 | Challenging | the same test engine with Challenging-level questions and **one hint per question** |
 | Nightmare | the same engine: linked multi-stage questions from the multi-step families (`ph_multistep`, `ph_mixed`, `ph_inverse`, `ph_angled_diff`, `ph_impact`, `ph_downward`, `ph_error`, `ph_velocity_at`, `ph_horizontal` at Nightmare level), labelled as stages, **no hints** |
 
 The Physics home is now the shared home screen (see docs/EXAM_MODE.md): the difficulty cards and preview work
-exactly as in Precalculus. The Practice destination's "Practise at your level" panel also follows the selected difficulty. For Simple it shows the guided-practice
-start; for the three test levels it shows a test preview (length, time, hint policy), a topic selector, the number
-of questions, **Start a … Physics test** and **Test options**. Test options opens the same Create-test dialog Math
+exactly as in Precalculus, and they are the one place tests start (the separate Practice launcher was removed as a
+duplicate). For every level the preview shows the length, time and hint policy, a topic selector, the number of questions, **Start a … test** and
+**Test options**. Test options opens the same Create-test dialog Math
 uses (time limit, campfire minigame) with Physics fields for topic and length; group tests stay Math-only.
 
 How it is wired (the smallest change that reuses the Math engine):
@@ -148,7 +149,7 @@ formula is for **equal launch and landing heights only**), rearrangements, an ex
   slope and area readouts, sketch a prediction and compare, values table.
 - **Vector visualizer** — drag the tip or use sliders; components and their signs.
 
-Tools unmount cleanly (timers and listeners removed) when you leave the Lab. In Studio+ the Physics home becomes a
+The tools live under **Learn → Labs (optional)**; no test or practice run goes through them. Tools unmount cleanly (timers and listeners removed) when you leave the Lab. In Studio+ the Physics home becomes a
 workbench with a compact Explorer.
 
 ## Layouts, Goose Mode, languages, accessibility
@@ -272,8 +273,8 @@ Totals: 21 implemented and tested, 2 implemented requiring validation, 20 planne
   keys grade right, wrong paths never graded right, same id rebuilds); keys cross-checked against an independent
   calculation from the numbers shown (600+ values); fixed difficulty; variety; separate history; curriculum status
   claims; lessons and formulas; every offered test topic at every level builds a full, valid, on-topic test.
-- `tests/e2e/phystests.js` (54 checks): the twelve acceptance checks for the difficulty workflows — Simple guided,
-  Normal / Challenging / Nightmare real tests, options and topics, answering, grading, results, separate history and
+- `tests/e2e/phystests.js` (58 checks): the acceptance checks for the difficulty workflows — Simple / Normal /
+  Challenging / Nightmare real tests, guided practice from The Bar, options and topics, answering, grading, results, separate history and
   diagnostics, resume, Math unchanged, layouts and phone.
 - `tests/e2e/physics.js` (67 checks): switcher and persistence, separate data, a full run answered through the real
   inputs, leaving an active run, all layouts, lab tools mount and clean up, Goose Mode compatibility, five languages

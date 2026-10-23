@@ -280,7 +280,8 @@
   function updateBadge(L) {
     L = L || A.learningState();
     const n = sessionPlan(L).length;
-    const b = A.$("#nav-review-badge");
+    const b = A.$("#nav-progress-badge");
+    if (A.getSubject && A.getSubject() === "physics") { if (b) b.hidden = true; return; }
     if (b) { b.hidden = !n; b.textContent = String(n); b.setAttribute("aria-label", `${n} due`); }
   }
 

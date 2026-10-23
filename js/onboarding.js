@@ -41,17 +41,18 @@
   // ───────── site tour ─────────
   function siteSteps() {
     const home = () => { A.setSettings(false); if (document.body.dataset.screen !== "home") A.go("home"); };
+    const take = () => { A.setSettings(false); if (document.body.dataset.screen !== "take") A.go("take"); };
     return [
       { id: "welcome", essential: true, title: "site.welcome.t", body: "site.welcome.b", nextLabel: "site.full",
         onEnter: () => { A.setSettings(false); A.setIsland(false); },
         actions: [{ id: "essentials", label: "site.essentials", run: () => startSite({ variant: "essentials", startId: "nav" }) }] },
       { id: "dash", title: "site.dash.t", body: "site.dash.b", target: "#topic-card", onEnter: home },
-      { id: "activity", title: "site.activity.t", body: "site.activity.b", target: ".dash-row", onEnter: home },
+      { id: "activity", title: "site.activity.t", body: "site.activity.b", target: "#hub-subjects", onEnter: home },
       { id: "nav", essential: true, title: "site.nav.t", body: "site.nav.b", target: "#island", interactive: true,
-        onEnter: () => { home(); setTimeout(() => { if (window.Tour.step && window.Tour.step.id === "nav") A.setIsland(true); }, 250); },
+        onEnter: () => { take(); setTimeout(() => { if (window.Tour.step && window.Tour.step.id === "nav") A.setIsland(true); }, 250); },
         onExit: () => A.setIsland(false) },
-      { id: "modes", essential: true, title: "site.modes.t", body: "site.modes.b", target: "#mode-track", interactive: true, onEnter: home },
-      { id: "preview", title: "site.preview.t", body: "site.preview.b", target: "#mode-preview", onEnter: home },
+      { id: "modes", essential: true, title: "site.modes.t", body: "site.modes.b", target: "#mode-track", interactive: true, onEnter: take },
+      { id: "preview", title: "site.preview.t", body: "site.preview.b", target: "#mode-preview", onEnter: take },
       { id: "library", title: "site.lib.t", body: "site.lib.b", target: "#lib-side, .lib-side", onEnter: () => { A.setSettings(false); A.go("library"); } },
       { id: "lesson", title: "site.lesson.t", body: "site.lesson.b", target: "#lib-main .lesson-head", onEnter: () => { A.setSettings(false); A.go("library", "quad.vertex_form"); window.scrollTo(0, 0); } },
       { id: "settings", essential: true, title: "site.settings.t", body: "site.settings.b", target: "#btn-settings", interactive: true,
@@ -63,7 +64,7 @@
         onEnter: () => A.setSettings(true) },
       { id: "look", title: "site.look.t", body: "site.look.b", target: ["#set-layout", "#set-theme"], interactive: true,
         onEnter: () => A.setSettings(true) },
-      { id: "tests", title: "site.tests.t", body: "site.tests.b", target: ".tests-row",
+      { id: "tests", title: "site.tests.t", body: "site.tests.b", target: "#drills",
         onEnter: () => { A.setSettings(false); A.go("practice"); window.scrollTo(0, 0); },
         actions: [{ id: "test-tutorial", label: "site.tests.go", primary: true, run: () => handoffToTest() }] },
       { id: "room", title: "site.room.t", body: "site.room.b", target: "#group-card", onEnter: () => { A.setSettings(false); A.go("studyroom"); } },
@@ -210,7 +211,7 @@
   }
 
   // ───────── entry points ─────────
-  // Title screen "Enter": a first visit (or a site tour interrupted by a reload) gets the site tour on Home.
+  // Opening the app (it boots onto Home): a first visit (or a site tour interrupted by a reload) gets the site tour on Home.
   function onEnter() {
     const s = load();
     if (s.resume && s.resume.tour === "site" && !s.site) { A.go("home"); return startSite({ variant: s.resume.variant, startId: s.resume.step }); }
@@ -236,6 +237,8 @@
       if (!b || b.disabled) return;
       e.preventDefault();
       const kind = b.dataset.onboard;
+      // opened from the Settings help: focus returns to the Settings button when the tour ends
+      if (b.closest("#settings-pop")) { const sb = document.getElementById("btn-settings"); if (sb) sb.focus({ preventScroll: true }); }
       if (kind === "site") { A.setSettings(false); startSite(); }
       else if (kind === "test") { A.setSettings(false); startTest(); }
       else if (kind === "game") startGame({ replay: true });

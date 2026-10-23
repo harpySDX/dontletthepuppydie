@@ -1,0 +1,295 @@
+/*
+ * The Study Café — atmosphere and layout. Loaded after the theme tokens.
+ *
+ * The café (js/cafe/scene.js) defines the atmosphere; the theme and accent the user picked define the interface.
+ * Nothing here hard-codes the café palette into components: panels, borders, buttons, highlights and progress all use
+ * the theme's tokens (var(--surface), var(--accent), …). The only fixed colours are inside the room itself (the
+ * painted backdrop below), which is behind a theme-tinted veil so text stays readable on every theme.
+ */
+
+/* ───────── typography: editorial serif display, readable sans body ───────── */
+:root[data-theme] { --font-display: "Cormorant Garamond", "Iowan Old Style", Garamond, Georgia, "Times New Roman", serif; --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1, h2, .panel-title, .brand-name { font-family: var(--font-display); font-optical-sizing: auto; }
+h1 { font-weight: 600; letter-spacing: -0.015em; }
+h2 { font-weight: 600; letter-spacing: -0.01em; }
+/* numbers and dense UI stay in the body face (tabular figures read better in Inter) */
+.stat-value, .tile-value, .best-score, .review-num, .q-label, .pause-time, .cd-value, .slider-value, .score-table td:first-child, .habit-marks, h3 { font-family: var(--font-body); }
+.eyebrow, .kicker { letter-spacing: 0.16em; }
+
+/* ───────── the room behind everything ───────── */
+#cafe-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: #140d08; }
+#cafe-bg .cafe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 0.9s ease; }
+#cafe-bg.ready .cafe-canvas { opacity: 1; }
+/* painted backdrop: the same room as warm light, shelves and a window, in CSS (before the 3D room loads, without
+   WebGL, or with the scene off) */
+.cafe-paint { position: absolute; inset: 0;
+  background:
+    radial-gradient(260px 200px at 22% 26%, rgba(255, 200, 120, 0.3), transparent 70%),
+    radial-gradient(220px 180px at 62% 34%, rgba(255, 190, 110, 0.22), transparent 70%),
+    radial-gradient(240px 160px at 88% 30%, rgba(255, 190, 110, 0.18), transparent 70%),
+    radial-gradient(420px 120px at 30% 92%, rgba(255, 180, 100, 0.12), transparent 70%),
+    repeating-linear-gradient(180deg, transparent 0 44px, rgba(38, 23, 12, 0.95) 44px 50px),
+    repeating-linear-gradient(90deg, rgba(110, 40, 30, 0.42) 0 6px, rgba(40, 62, 46, 0.42) 6px 11px, rgba(150, 120, 62, 0.36) 11px 15px, rgba(30, 40, 62, 0.42) 15px 21px, transparent 21px 24px, rgba(120, 90, 60, 0.36) 24px 29px, rgba(90, 30, 40, 0.4) 29px 33px, transparent 33px 40px),
+    linear-gradient(180deg, #0e0906 0%, #1a120c 14%, #1d2a21 16%, #1d2a21 52%, #2c1b10 53%, #3a2416 66%, #24160d 100%);
+  background-size: auto, auto, auto, auto, 76% 300px, 76% 300px, auto;
+  background-position: 0 0, 0 0, 0 0, 0 0, 12% 17vh, 12% 17vh, 0 0;
+  background-repeat: no-repeat; }
+#cafe-bg.ready .cafe-paint { opacity: 0; transition: opacity 0.9s ease 0.3s; }
+/* the veil: a theme-tinted wash so headings and body text placed directly on the room keep their contrast */
+.cafe-veil { position: absolute; inset: 0; --veil-top: 46%; --veil-bottom: 74%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) var(--veil-top), transparent) 0%, color-mix(in srgb, var(--bg) var(--veil-mid, 58%), transparent) 40%, color-mix(in srgb, var(--bg) var(--veil-bottom), transparent) 100%),
+    radial-gradient(120% 90% at 50% 40%, transparent 40%, color-mix(in srgb, var(--bg) 55%, transparent) 100%); }
+:root[data-theme="cafe"] .cafe-veil { --veil-top: 14%; --veil-bottom: 46%; }
+:root[data-tone="light"] .cafe-veil { --veil-top: 74%; --veil-bottom: 86%; }
+:root[data-tone="light"] .cafe-veil { background: linear-gradient(180deg, color-mix(in srgb, var(--bg) var(--veil-top), transparent) 0%, color-mix(in srgb, var(--bg) 80%, transparent) 45%, color-mix(in srgb, var(--bg) var(--veil-bottom), transparent) 100%); }
+:root[data-scene] body { background: transparent; }
+:root[data-scene] { background: var(--bg); }
+/* translucent panels over the room: the theme's own surface, a little more opaque, blurred behind */
+:root[data-scene] { --glass: color-mix(in srgb, var(--surface) 80%, transparent); --glass-strong: color-mix(in srgb, var(--surface) 93%, transparent); --blur: saturate(130%) blur(18px); }
+:root[data-scene][data-tone="light"] { --glass: color-mix(in srgb, var(--surface) 84%, transparent); }
+:root[data-scene] .glass { -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+/* the test is a quiet room: no café, the theme's plain background */
+body[data-screen="test"] #cafe-bg, body[data-screen="results"] .cafe-canvas { display: none; }
+:root[data-scene] body[data-screen="test"] {
+  background: radial-gradient(900px 520px at 8% -8%, var(--bg-tint-1), transparent 65%), radial-gradient(760px 480px at 100% 0%, var(--bg-tint-2), transparent 62%), var(--bg);
+  background-attachment: fixed; }
+@media (prefers-reduced-motion: reduce) { #cafe-bg .cafe-canvas, .cafe-paint { transition: none; } }
+@media print { #cafe-bg { display: none; } }
+
+/* ───────── home: the café hub (greeting · subjects · Recommended Practice · tiles · The Bar board) ───────── */
+:root { --hub-panel: color-mix(in srgb, var(--surface) 46%, transparent); --hub-line: color-mix(in srgb, var(--ink) 14%, transparent); --subj-math: var(--violet); --subj-phys: color-mix(in srgb, #7fa6d9 72%, var(--accent)); }
+:root[data-tone="light"] { --hub-panel: color-mix(in srgb, var(--surface) 72%, transparent); }
+.cafe-home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 660px) minmax(0, 1fr); gap: 24px; align-items: start; padding-top: clamp(0px, 2.5vh, 28px); }
+.hub { grid-column: 2; display: grid; gap: clamp(10px, 1.6vh, 16px); }
+.hub-hero { text-align: center; margin-bottom: clamp(2px, 1vh, 12px); }
+.hub-kicker { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: color-mix(in srgb, var(--ink) 82%, transparent); margin: 0 0 10px; font-weight: 500; }
+.hub-hero h1 { font-family: var(--font-display); font-weight: 500; font-size: clamp(2rem, min(3.2vw, 4.6vh), 2.8rem); line-height: 1.12; letter-spacing: -0.005em; margin: 0 auto 10px; max-width: 15em; text-wrap: balance; }
+.hub-tag { font-family: var(--font-display); font-style: italic; font-weight: 500; font-size: 1.28rem; color: color-mix(in srgb, var(--ink) 80%, transparent); margin: 0; }
+.hub-card, .subj-card { background: var(--hub-panel); border: 1px solid var(--hub-line); border-radius: 16px;
+  -webkit-backdrop-filter: saturate(120%) blur(14px); backdrop-filter: saturate(120%) blur(14px); box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.7); }
+#resume-box:empty { display: none; }
+/* subjects */
+.hub-subjects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.subj-card { display: grid; padding: 0; overflow: hidden; transition: border-color 0.2s ease, transform 0.2s ease; }
+.subj-card.current { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.subj-card:hover { transform: translateY(-1px); }
+.sc-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; padding: 20px 20px 16px; background: none; border: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.sc-ico { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; color: var(--ink);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--subj-math) 55%, transparent), color-mix(in srgb, var(--subj-math) 22%, transparent)); border: 1px solid var(--hub-line); }
+.s-physics .sc-ico { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--subj-phys) 60%, transparent), color-mix(in srgb, var(--subj-phys) 22%, transparent)); }
+.sc-ico svg { width: 34px; height: 34px; }
+.sc-t { display: grid; gap: 8px; }
+.sc-t b { font-family: var(--font-display); font-weight: 500; font-size: 1.65rem; letter-spacing: 0; }
+.sc-bar { display: block; height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 16%, transparent); overflow: hidden; }
+.sc-bar span { display: block; height: 100%; border-radius: inherit; background: var(--subj-math); min-width: 0; transition: width 0.6s ease; }
+.s-physics .sc-bar span { background: var(--subj-phys); }
+.sc-t small { font-size: 0.8rem; color: color-mix(in srgb, var(--ink) 74%, transparent); }
+.sc-next { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 20px; padding: 12px 4px 16px; border: 0; border-top: 1px solid var(--hub-line); background: none; color: color-mix(in srgb, var(--ink) 78%, transparent); font: inherit; font-size: 0.84rem; cursor: pointer; text-align: left; }
+.sc-next:hover { color: var(--ink); }
+.sc-main:focus-visible, .sc-next:focus-visible, .hub-tile:focus-visible, .game-card .btn:focus-visible { outline: none; box-shadow: var(--focus); border-radius: 12px; }
+/* Recommended Practice */
+.rec-card { display: grid; justify-items: center; gap: 14px; padding: clamp(16px, 2.2vh, 22px) 26px; text-align: center; }
+.rc-head { display: flex; align-items: center; gap: 16px; text-align: left; max-width: 520px; }
+.rc-ico { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--hub-line); color: var(--ink); background: color-mix(in srgb, var(--surface) 50%, transparent); }
+.rc-ico svg { width: 30px; height: 30px; }
+.rc-t h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.5rem; margin: 0 0 4px; letter-spacing: 0; }
+.rec-why { margin: 0; color: color-mix(in srgb, var(--ink) 78%, transparent); font-size: 0.84rem; line-height: 1.5; }
+.rec-why b { color: var(--ink); font-weight: 600; }
+.rec-subj { font-weight: 500; color: var(--ink); }
+.rec-actions { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: center; }
+.rec-note { margin: 0; font-size: 0.74rem; color: color-mix(in srgb, var(--ink) 62%, transparent); }
+/* the pill: parchment on dark themes, ink on light ones (always the theme's own contrast pair) */
+.btn-pill.btn-primary { background: color-mix(in srgb, var(--ink) 90%, var(--accent)); color: var(--bg); border: 0; border-radius: 999px; padding: 11px 28px; font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6); }
+.btn-pill.btn-primary:hover:not(:disabled) { filter: none; background: var(--ink); }
+/* tiles */
+.hub-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: clamp(12px, 2vh, 20px) 8px; }
+.hub-tile { display: grid; justify-items: center; gap: 6px; padding: 4px 12px; background: none; border: 0; color: var(--ink); font: inherit; cursor: pointer; text-align: center; }
+.hub-tile + .hub-tile { border-left: 1px solid var(--hub-line); }
+.ht-ico { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--hub-line); background: color-mix(in srgb, var(--surface) 45%, transparent); margin-bottom: 6px; }
+.ht-ico svg { width: 28px; height: 28px; }
+.hub-tile b { font-family: var(--font-display); font-weight: 500; font-size: 1.35rem; }
+.hub-tile small { font-size: 0.8rem; color: color-mix(in srgb, var(--ink) 72%, transparent); }
+.hub-tile:hover b { color: var(--accent); }
+.hub-caption { position: fixed; left: 52px; bottom: 56px; margin: 0; font-family: var(--font-display); font-style: italic; font-size: 1.25rem; line-height: 1.5; color: color-mix(in srgb, var(--ink) 85%, transparent); pointer-events: none; }
+.hub-caption::after { content: ""; display: block; width: 40px; height: 1px; margin-top: 18px; background: color-mix(in srgb, var(--ink) 50%, transparent); }
+body:not([data-screen="home"]) .hub-caption { display: none; }
+/* layouts */
+:root[data-layout="focus"] .hub-caption { display: none; }
+:root[data-layout="studio"] .cafe-home { grid-template-columns: minmax(0, 0.6fr) minmax(0, 700px) minmax(0, 1fr); }
+@media (max-width: 1180px) {
+  .cafe-home { grid-template-columns: minmax(0, 1fr) minmax(0, 640px) minmax(0, 1fr); }
+  .hub-caption { display: none; }
+}
+@media (max-width: 700px) {
+  .cafe-home { grid-template-columns: minmax(0, 1fr); padding-top: 0; }
+  .hub { grid-column: 1; }
+  .hub-subjects { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .hub-tiles { grid-template-columns: minmax(0, 1fr); padding: 6px 14px; }
+  .hub-tile { grid-template-columns: auto minmax(0, 1fr); justify-items: start; text-align: left; padding: 12px 4px; column-gap: 14px; }
+  .hub-tile .ht-ico { grid-row: span 2; margin: 0; }
+  .hub-tile + .hub-tile { border-left: 0; border-top: 1px solid var(--hub-line); }
+  .rc-head { flex-direction: column; text-align: center; }
+}
+/* Take a Test page */
+.take-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.test-card { padding: 20px 22px 22px; border-radius: var(--radius-lg); }
+.test-card .slide-ctl { display: none; }
+
+/* ───────── The Bar ───────── */
+.bar-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.bar-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 6px 0 26px; }
+.bar-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: start; padding: 16px; border-radius: 18px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--shadow-1); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); transition: border-color 0.18s ease, transform 0.18s ease; }
+.bar-item:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+.bar-item:focus-visible { outline: none; box-shadow: var(--focus); }
+.bar-item .bi-ico { grid-row: span 2; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 1.1rem; }
+.bar-item b { font-family: var(--font-display); font-size: 1.08rem; font-weight: 600; }
+.bar-item small { color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+.bar-item .bi-tag { grid-column: 2; justify-self: start; margin-top: 4px; font-size: 0.68rem; font-weight: 600; color: var(--tag-ink); background: var(--tag-bg); border-radius: 999px; padding: 2px 8px; }
+.bar-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; }
+.bar-sec-h h2 { margin: 0; font-size: 1.3rem; }
+.bar-find { min-width: min(320px, 100%); }
+.bar-topics { display: grid; gap: 18px; }
+.bar-group h3 { margin: 0 0 8px; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.bar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px 10px 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--glass-border); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.bar-row .br-t b { display: block; font-size: 0.92rem; }
+.bar-row .br-t small { color: var(--muted); font-size: 0.75rem; }
+.bar-row .br-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.bar-empty { color: var(--muted); }
+.crumb-back { display: inline-flex; align-items: center; gap: 6px; font-size: 0.86rem; color: var(--ink); background: color-mix(in srgb, var(--surface) 55%, transparent); border: 1px solid var(--hub-line); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--font-display); margin-bottom: 10px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.crumb-back:hover { border-color: var(--accent-line); }
+.crumb-back:focus-visible { outline: none; box-shadow: var(--focus); }
+
+/* ───────── Game: optional play, one card per game ───────── */
+.game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 18px; max-width: 900px; }
+.game-card { display: grid; gap: 8px; align-content: start; padding: 22px 24px; }
+.game-card .ht-ico { margin: 0 0 4px; }
+.game-card h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.5rem; margin: 0; }
+.game-card p { margin: 0; font-size: 0.88rem; line-height: 1.5; color: color-mix(in srgb, var(--ink) 80%, transparent); }
+.game-card .game-state { font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in srgb, var(--ink) 65%, transparent); margin-top: 4px; }
+.game-card .rec-actions { justify-content: flex-start; margin-top: 8px; }
+.game-card .btn-pill.btn-primary { font-size: 1.05rem; padding: 9px 22px; }
+@media (max-width: 640px) {
+  .bar-row { grid-template-columns: minmax(0, 1fr); }
+  .bar-row .br-acts { justify-content: flex-start; }
+}
+
+/* ───────── Settings: accent colour and café scene ───────── */
+.accent-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.acc-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--elevated); color: var(--ink); font: inherit; font-size: 0.76rem; cursor: pointer; }
+.acc-opt.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.acc-opt:focus-visible { outline: none; box-shadow: var(--focus); }
+.acc-dot { width: 16px; height: 16px; border-radius: 50%; flex: none; background: var(--dot); box-shadow: 0 0 0 1px var(--line-strong); }
+.acc-dot.acc-theme { background: conic-gradient(from 45deg, var(--th-a, var(--accent)), var(--th-b, var(--violet)), var(--th-a, var(--accent))); }
+#set-scene { display: flex; }
+#set-scene button { flex: 1; }
+
+/* phones: keep the island on one row (brand, subject, settings) — the name truncates before anything wraps */
+@media (max-width: 480px) {
+  .island { flex-wrap: nowrap; }
+  .island.open { flex-wrap: wrap; }
+  .island-id { max-width: 29vw; }
+  body[data-screen="home"] .island-id { max-width: 54vw; }
+  .island-name, .island-ctx { overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ───────── the top bar: brand left, sections in the middle, theme and settings right ───────── */
+.island-wrap { justify-content: stretch; padding: 14px 28px 18px; }
+/* During a test the bar, the question, the navigator and the controls share ONE centred column (--test-w): the
+   island is not stretched across the window but sized to the test grid, and the grid is capped at the same width. */
+body { --test-w: 900px; }
+body:not(.buddy-off) { --test-w: 1286px; }                     /* 250 + 22 + 900 + 22 + 92 */
+:root[data-layout="focus"] body { --test-w: 980px; }
+:root[data-layout="focus"] body:not(.buddy-off) { --test-w: 1264px; }
+:root[data-layout="studio"] body { --test-w: 1640px; }
+@media (max-width: 980px) { body.buddy-off { --test-w: 860px; } body:not(.buddy-off) { --test-w: 100%; } }
+body[data-screen="test"] .island-wrap { justify-content: center; padding-inline: 0; }
+.island.in-test { width: min(var(--test-w), 100%); box-sizing: border-box; }
+.test-layout { max-width: var(--test-w); margin-inline: auto; }
+.island:not(.in-test) { width: 100%; max-width: none; background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; gap: 14px; }
+.island:not(.in-test)::before { display: none; }
+.island:not(.in-test) .island-brand { padding: 4px 14px 4px 4px; }
+.island:not(.in-test) .island-brand:hover { background: transparent; }
+.cafe-mark { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: color-mix(in srgb, var(--surface) 55%, transparent); border: 1px solid var(--hub-line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.cafe-mark svg { width: 24px; height: 24px; }
+.island:not(.in-test) .island-name { font-family: var(--font-display); font-weight: 500; font-size: 1.55rem; letter-spacing: 0; }
+.island:not(.in-test) .island-ctx { font-family: var(--font-display); font-style: italic; font-size: 0.98rem; color: color-mix(in srgb, var(--ink) 80%, transparent); }
+.island:not(.in-test) .island-chev { display: none; }
+.island:not(.in-test) .main-nav { flex: 1; justify-content: center; max-width: none; }
+.island:not(.in-test) #btn-theme { margin-left: auto; }
+.island:not(.in-test) .main-nav button { background: none; border-color: transparent; color: color-mix(in srgb, var(--ink) 80%, transparent); font-family: var(--font-display); }
+.island:not(.in-test) .main-nav button.active { color: var(--ink); background: color-mix(in srgb, var(--surface) 50%, transparent); border-color: var(--hub-line); }
+body[data-screen="home"] .island:not(.in-test) .main-nav { visibility: hidden; }
+body[data-screen="home"] #subject-btn { display: none; }
+body[data-screen="home"] .island.open:not(.in-test) .main-nav { visibility: visible; }
+.top-icon { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 999px; color: var(--ink); background: color-mix(in srgb, var(--surface) 50%, transparent); border: 1px solid var(--hub-line); cursor: pointer; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.top-icon:focus-visible, .pup-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+.island.in-test .top-icon, body:not([data-screen="home"]) #btn-visit-bar { display: none; }
+.island:not(.in-test) .visit-bar { font-family: var(--font-display); font-size: 1rem; }
+.visit-bar svg { flex: none; }
+.island:not(.in-test) .pup-btn { background: color-mix(in srgb, var(--surface) 50%, transparent); border: 1px solid var(--hub-line); color: var(--ink); }
+@media (max-width: 760px) {
+  .island-wrap { padding: 8px 12px 12px; }
+  .island:not(.in-test) .island-name { font-size: 1.1rem; }
+  .cafe-mark { width: 42px; height: 42px; }
+  .island.open:not(.in-test) { background: var(--glass-strong); border-color: var(--hub-line); padding: 6px; border-radius: 22px; }
+  .top-icon .tb-chev { display: none; }
+  .top-icon { padding: 0 11px; }
+}
+
+/* inner pages: the room steps further back so long text reads easily; the home keeps the most café */
+:root body:not([data-screen="home"]) .cafe-veil { --veil-top: 72%; --veil-mid: 74%; --veil-bottom: 84%; }
+:root[data-tone="light"] body:not([data-screen="home"]) .cafe-veil { --veil-top: 84%; --veil-bottom: 90%; }
+.island:not(.in-test) .main-nav button { font-family: var(--font-body); }
+
+/* difficulty cards in the café: quiet glass, the level colour kept on the icon and the selected edge */
+.test-card { background: var(--hub-panel); border: 1px solid var(--hub-line); box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.7); }
+.mode-card { background: color-mix(in srgb, var(--surface) 55%, transparent); border-color: var(--hub-line); box-shadow: none; }
+.mode-card.active { border-color: color-mix(in srgb, var(--m) 70%, var(--ink)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--m) 60%, transparent), 0 18px 40px -26px color-mix(in srgb, var(--m) 80%, transparent); }
+.mode-ico { color: var(--ink); background: color-mix(in srgb, var(--m, var(--accent)) 34%, transparent); border: 1px solid color-mix(in srgb, var(--m, var(--accent)) 55%, transparent); box-shadow: none; }
+.mode-name { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; }
+.mode-tag, .mode-desc { color: color-mix(in srgb, var(--ink) 74%, transparent); }
+.mode-sel { background: transparent; border-color: var(--hub-line); }
+.mode-card.active .mode-sel { background: color-mix(in srgb, var(--ink) 90%, var(--accent)); color: var(--bg); }
+.mode-preview { background: color-mix(in srgb, var(--surface) 55%, transparent); border-color: var(--hub-line); }
+.mp-head h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.4rem; }
+.mp-head p { color: color-mix(in srgb, var(--ink) 76%, transparent); }
+
+/* Goose Mode swaps the café marks for the goose (the puppy and paw stay as the mascot underneath) */
+.set-mascot, .brand-mascot { display: none; }
+body.goose-on .set-mascot, body.goose-on .brand-mascot { display: block; }
+body.goose-on .set-person, body.goose-on .brand-cup { display: none; }
+
+/* ───────── the photographed café (the default backdrop) ───────── */
+.cafe-photo { position: absolute; inset: -2%; background: center / cover no-repeat; opacity: 0; transition: opacity 0.8s ease; will-change: opacity; contain: strict; }
+#cafe-bg.photo-ready .cafe-photo { opacity: 1; }
+#cafe-bg.photo-ready .cafe-paint { opacity: 0; transition: opacity 0.8s ease; }
+:root[data-scene="photo"] .cafe-canvas, :root[data-scene="off"] .cafe-photo, :root[data-scene="off"] .cafe-canvas { display: none; }
+:root:not([data-scene="photo"]) .cafe-photo { display: none; }
+/* the photo stays still: animating it would make every blurred glass panel above it repaint each frame */
+.island.in-test .topbar-test { flex: 1; min-width: 0; }
+/* photo backdrop: a soft theme-tinted shade behind the brand (the chalk menu sits there) and the bright windows on
+   the right, so the top bar reads cleanly whatever the light in the picture */
+:root[data-scene="photo"] #cafe-bg::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(38% 26% at 8% 4%, color-mix(in srgb, var(--bg) 78%, transparent), transparent 100%),
+              radial-gradient(34% 22% at 94% 4%, color-mix(in srgb, var(--bg) 55%, transparent), transparent 100%); }
+/* the café home fits one screen: no footer line under it, and shorter windows tighten the cards rather than scroll */
+body[data-screen="home"] .app-foot, body[data-screen="home"] footer { display: none; }
+body[data-screen="home"] .app { padding-bottom: 16px; }
+@media (min-width: 701px) and (max-height: 860px) {
+  .island-wrap { padding-top: 8px; padding-bottom: 8px; }
+  .hub-kicker { margin-bottom: 6px; }
+  .hub-hero h1 { font-size: clamp(1.8rem, 4.4vh, 2.3rem); margin-bottom: 6px; }
+  .hub-tag { font-size: 1.1rem; }
+  .sc-main { padding: 14px 18px 10px; gap: 14px; }
+  .sc-ico { width: 48px; height: 48px; } .sc-ico svg { width: 28px; height: 28px; }
+  .sc-t b { font-size: 1.4rem; } .sc-t { gap: 6px; }
+  .sc-next { padding: 8px 4px 10px; }
+  .rec-card { gap: 10px; padding: 14px 22px; }
+  .rc-t h2 { font-size: 1.3rem; }
+  .btn-pill.btn-primary { padding: 8px 24px; font-size: 1.08rem; }
+  .hub-tiles { padding: 10px 8px; }
+  .ht-ico { width: 38px; height: 38px; margin-bottom: 2px; } .ht-ico svg { width: 24px; height: 24px; }
+  .hub-tile { gap: 2px; } .hub-tile b { font-size: 1.2rem; }
+}

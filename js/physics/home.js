@@ -44,11 +44,6 @@
 
   // ───────── the selected level's preview (same structure and classes as the Math preview) ─────────
   function example(m, seed) {
-    if (m === "simple") {
-      const sub = UI().prefs().sub, F = B().FAMILIES.find((f) => f.subject === "physics" && f.subs.includes(sub) && f.modes.includes("simple"));
-      if (!F) return null;
-      try { const q = B().make(F.id, "wr", "simple", seed * 7919 + 3); return q; } catch { return null; }
-    }
     try { const { questions } = PT().build(m, { n: 1, rnd: B().rng(seed * 7919 + m.length), preview: true }); return questions[0] || null; } catch { return null; }
   }
   function topicSelect(lv, cur, id = "pt-topic") {
@@ -59,15 +54,9 @@
     const ex = example(m, seed);
     const head = `<div class="mp-head"><span class="mode-ico" aria-hidden="true">${A.MODE_ICON()[m]}</span><div><h3>${esc(tr("mode.previewTitle", { mode: tr("mode." + m) }))}</h3><p>${esc(tr("pt.mode." + m))}</p></div></div>`;
     let body;
-    if (m === "simple") {
-      const p = UI().prefs(), cov = C().coverage().filter((c) => c.families.length && c.modes.includes("simple"));
-      const cur = cov.some((c) => c.id === p.sub) ? p.sub : (cov[0] || {}).id;
-      body = `<ul class="mp-chips">${[1, 2, 3].map((k) => `<li>${esc(tr("pt.f.simple" + k))}</li>`).join("")}</ul>
-        <label class="mp-skill"><span>${esc(tr("mode.simpleTopic"))}</span><select id="ph-simple-sub" class="text-input">${cov.map((c) => `<option value="${c.id}" ${c.id === cur ? "selected" : ""}>${esc(loc(c.title))}</option>`).join("")}</select></label>
-        <div class="mp-actions"><button type="button" class="btn btn-primary" id="btn-start" data-start-mode="simple">${esc(tr("mode.start.simple"))}</button></div>`;
-    } else {
+    {
       const o = PT().options(m);
-      const hint = { normal: "pt.hints.normal", challenge: "pt.hints.challenge", nightmare: "pt.hints.nightmare" }[m];
+      const hint = { simple: "pt.hints.simple", normal: "pt.hints.normal", challenge: "pt.hints.challenge", nightmare: "pt.hints.nightmare" }[m];
       body = `<ul class="mp-chips"><li>${esc(tr("pt.f.len", { n: o.n, min: o.minutes }))}</li><li>${esc(tr(hint))}</li><li>${esc(tr("pt.f.results"))}</li></ul>
         <div class="mp-pt-opts"><label class="mp-skill"><span>${esc(tr("ph.topic"))}</span>${topicSelect(m, o.topic)}</label>
         <div class="mp-skill"><span id="pt-n-l">${esc(tr("pt.count"))}</span><div class="segmented small-seg" role="radiogroup" aria-labelledby="pt-n-l">${PT().COUNTS[m].map((n) => `<button type="button" role="radio" data-pt-n="${n}" aria-checked="${n === o.n}" class="${n === o.n ? "active" : ""}">${n}</button>`).join("")}</div></div></div>
@@ -142,7 +131,7 @@
       <div class="sp-sec"><h3>${esc(tr("ph.bySkill"))}</h3><ul class="sp-list">${skills.sort((x, y) => x.acc - y.acc).map((s) => `<li><button type="button" class="sp-link" data-phys-lesson="${UI().SKILL_MAP[s.id].lesson}">${esc(tr("phs." + s.id))}</button><span class="sp-pct ${pctCls(s.acc * 100)}">${Math.round(s.acc * 100)}%</span><small class="faint">${s.status === "few" ? esc(tr("ph.few", { n: s.n })) : esc(tr("ph.st." + s.status))}</small></li>`).join("")}</ul></div>
       <div class="sp-sec"><h3>${esc(tr("ph.errTypes"))}</h3>${errRows.length ? `<ul class="sp-list">${errRows.map(([k, n]) => `<li><span>${esc(tr("phc." + k))}</span><b class="sp-num">${n}</b></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("ph.errNone"))}</p>`}${D.unclassified ? `<p class="faint small">${esc(tr("ph.unclassified", { n: D.unclassified }))}</p>` : ""}</div>
       <p class="faint small">${esc(tr("ph.diagHonest"))}</p>`;
-    const isTest = mode !== "simple";
+    const isTest = true; // every level is a test
     const o = isTest ? PT().options(mode) : null;
     const launch = `
       <span class="field-label" id="sp-level-l">${esc(tr("sp.level"))}</span>
@@ -155,7 +144,7 @@
       </div>
       ${isTest ? `<div class="sp-topic"><label><span>${esc(tr("ph.topic"))}</span>${topicSelect(mode, o.topic, "sp-pt-topic")}</label>
         <div class="mp-skill"><span id="sp-pt-n-l">${esc(tr("pt.count"))}</span><div class="segmented small-seg" role="radiogroup" aria-labelledby="sp-pt-n-l">${PT().COUNTS[mode].map((n) => `<button type="button" role="radio" data-pt-n="${n}" aria-checked="${n === o.n}" class="${n === o.n ? "active" : ""}">${n}</button>`).join("")}</div></div></div>
-        <p class="faint small">${esc(tr("pt.f.len", { n: o.n, min: o.minutes }))} · ${esc(tr({ normal: "pt.hints.normal", challenge: "pt.hints.challenge", nightmare: "pt.hints.nightmare" }[mode]))}</p>` : ""}`;
+        <p class="faint small">${esc(tr("pt.f.len", { n: o.n, min: o.minutes }))} · ${esc(tr("pt.hints." + mode))}</p>` : ""}`;
     const queue = Q.length ? `<ul class="sp-queue">${Q.slice(0, 6).map((f) => `<li><span class="sp-q-k"><b>${esc(UI().famTitle(f.family))}</b><small>${esc(tr("ph.review.why", { n: f.misses, when: A.rel(f.lastMiss) }))}${f.due ? " · " + esc(tr("ph.review.due")) : ""}</small></span><button type="button" class="btn btn-sm btn-secondary" data-phys-fams="${esc(f.family)}">${esc(tr("ph.practise"))}</button></li>`).join("")}</ul><p class="faint small">${esc(tr("ph.review.note"))}</p>` : `<p class="empty-note">${esc(tr("ph.review.empty"))}</p>`;
     const curric = `<ul class="sp-units">${C().UNITS.map((u) => {
       const rows = cov.filter((c) => c.unit === u.id), tested = rows.filter((c) => c.status === "tested"), mine = rs.filter((r) => rows.some((c) => c.id === r.sub)), ua = acc(mine), prac = new Set(mine.map((r) => r.sub)).size;
@@ -179,5 +168,94 @@
       <section class="sp-panel glass sp-hist-p" aria-labelledby="sp-hist-h"><div class="panel-head sm"><h2 id="sp-hist-h">${esc(tr("sp.hist"))}</h2><button type="button" class="btn btn-link btn-sm" data-go="progress">${esc(tr("act.viewAll"))}</button></div><div class="sp-scroll">${hist}</div></section>`;
   }
 
-  window.PhysHome = { welcome, topicCard, cardDesc, preview, activity, goals, concepts, stats, studioPlus };
+  // ───────── Practice › By topic: the same topic cards as Math (one per lesson), each with untimed practice at
+  // Simple / Normal / Challenging and a link to the lesson ─────────
+  const DRILL_GROUPS = [["ph.grp.foundations", ["phys.vectors", "phys.units", "phys.model"]], ["ph.grp.launches", ["phys.vertical", "phys.horizontal", "phys.angled", "phys.heights"]], ["ph.grp.representations", ["phys.graphs"]]];
+  function drills(A) {
+    const rs = recs();
+    const card = (l) => {
+      const mine = rs.filter((r) => l.families.includes(r.family)), a = acc(mine);
+      const st = !mine.length ? ["none", tr("ph.st.none")] : mine.length < 3 ? ["none", tr("ph.few", { n: mine.length })] : a >= 85 ? ["good", tr("ph.st.strong")] : a >= 60 ? ["mid", tr("ph.st.developing")] : ["low", tr("ph.st.needs")];
+      const fams = l.families.filter((f) => B().byFam(f));
+      const at = (m) => fams.filter((f) => B().byFam(f).modes.includes(m));
+      return `<article class="drill glass">
+        <header><span class="level-pill st-${st[0]}">${esc(st[1])}</span><span class="drill-pct">${a === null ? "" : a + "%"}</span></header>
+        <h3>${esc(loc(l.title))}</h3>
+        <p class="small muted">${A.renderMath(loc(l.summary))}</p>
+        <div class="drill-actions">${["simple", "normal", "challenge"].map((m) => `<button type="button" class="btn btn-sm ${m === "normal" ? "btn-primary" : "btn-secondary"}" data-ph-fams="${at(m).join(",")}" data-level="${m}" ${at(m).length ? "" : `disabled title="${esc(tr("ph.notAtLevelNote", { mode: tr("mode." + m) }))}"`}>${esc(tr("mode." + m))}</button>`).join("")}<button type="button" class="btn btn-link btn-sm" data-ph-lesson="${l.id}">${esc(tr("prac.lesson"))}</button></div>
+      </article>`;
+    };
+    return `<div class="phys-host">${DRILL_GROUPS.map(([k, ids]) => `<section class="drill-group"><h2 class="sub-h">${esc(tr(k))}</h2><div class="drill-grid">${ids.map((id) => card(CT().get(id))).join("")}</div></section>`).join("")}
+      <p class="faint small">${esc(tr("ph.drills.note"))}</p></div>`;
+  }
+
+  // ───────── Progress › Overview (same cards as the Math Progress page) and › Mistakes & review ─────────
+  function progress(A) {
+    const hist = PT().history(), rs = recs();
+    const norm = hist.filter((h) => h.level === "normal"), best = norm.length ? Math.max(...norm.map((h) => h.percent)) : null;
+    const last = hist.slice(-5), avg = last.length ? Math.round(last.reduce((x, h) => x + h.percent, 0) / last.length) : null;
+    const tile = (v, k) => `<div class="tile${v === null ? " empty-tile" : ""}"><span class="tile-value">${v === null ? "—" : esc(String(v))}</span><span class="tile-label">${esc(tr(k))}</span></div>`;
+    const histList = hist.length ? `<ul class="act-list">${hist.slice().reverse().slice(0, 20).map((h) => `<li><button type="button" class="act-item" data-attempt="${esc(h.id)}"><span class="act-ico test" aria-hidden="true">✓</span><span class="act-t"><b>${esc(tr("pt.recentTest", { mode: tr("mode." + h.level) }))}</b><small>${esc(A.niceDate(h.date))}</small></span><span class="act-pct ${pctCls(h.percent)}">${Math.round(h.percent)}%</span><span class="act-when">${esc(A.rel(h.date))}</span></button></li>`).join("")}</ul>` : `<p class="empty-note">${esc(tr("ph.hist.empty"))}</p>`;
+    return `<div class="progress-grid">
+      <div class="card stats-card"><div class="card-head progress-head"><h2>${esc(tr("ph.prog.tests"))}</h2></div>
+        <div class="stat-tiles">${tile(hist.length || null, "ph.prog.taken")}${tile(best === null ? null : Math.round(best) + "%", "ph.prog.best")}${tile(avg === null ? null : avg + "%", "ph.prog.avg")}${tile(rs.length || null, "ph.m.parts")}</div></div>
+      <div class="card"><div class="card-head"><h2>${esc(tr("ph.diag"))}</h2></div>${UI().diagPanel(false)}</div>
+      <div class="card goals-card"><div class="card-head"><h2>${esc(tr("goals.title"))}</h2></div>${goals(A)}</div>
+      <div class="card"><div class="card-head"><h2>${esc(tr("ph.diag.title"))}</h2></div><p>${esc(tr("ph.diag.explain"))}</p><div class="ph-actions"><button type="button" class="btn btn-primary" data-ph-start="diag">${esc(tr("ph.runDiag"))}</button></div><p class="faint small">${esc(tr("ph.diag.levelNote", { mode: tr("mode." + A.selectedMode()) }))}</p></div>
+      <div class="card history-card"><div class="card-head"><h2>${esc(tr("ph.prog.history"))}</h2><span class="muted small">${esc(tr("ph.prog.historyD"))}</span></div>${histList}</div>
+    </div>`;
+  }
+  function review() {
+    return `<div class="progress-grid"><div class="card history-card"><div class="card-head"><h2>${esc(tr("ph.review"))}</h2></div>${UI().reviewPanel()}</div></div>`;
+  }
+
+  // ───────── café home: Diagnostics row, Recommended practice, The Bar's topic list ─────────
+  function summary() {
+    const rs = recs();
+    const groups = CT().LESSONS.filter((l) => l.families.length).map((l) => { const mine = rs.filter((r) => l.families.includes(r.family)); return { name: loc(l.title), pct: mine.length >= 3 ? acc(mine) : null }; });
+    const known = groups.filter((g) => g.pct !== null).sort((a, b) => b.pct - a.pct);
+    return { acc: acc(rs), tests: PT().history().length, answers: rs.length, best: known.length > 1 ? known[0] : null, worst: known.length > 1 ? known[known.length - 1] : null };
+  }
+  const lessonOf = (fam) => CT().LESSONS.find((l) => l.families.includes(fam));
+  // the most useful Physics topic to practise next, from real answers only; null = not enough to go on
+  function recommend(A) {
+    const rs = recs();
+    if (!rs.length && !PT().history().length) return null;
+    const Q = UI().reviewQueue(rs);
+    if (Q.length) {
+      const f = Q[0], mine = rs.filter((r) => r.family === f.family), l = lessonOf(f.family);
+      return { topic: UI().famTitle(f.family), why: tr("rec.ph.missed", { n: f.misses, when: A.rel(f.lastMiss) }), acc: acc(mine), n: mine.length,
+        start: `data-ph-fams="${esc(f.family)}" data-level="normal"`, lesson: l ? `data-ph-lesson="${l.id}"` : "", levelNote: tr("rec.ph.fresh") };
+    }
+    const D = UI().diagnose(rs);
+    if (D.weak.length) {
+      const s = D.weak[0], m = UI().SKILL_MAP[s.id], level = s.acc < 0.6 ? "simple" : "normal";
+      return { topic: tr("phs." + s.id), why: tr("rec.ph.weak", { pct: Math.round(s.acc * 100), n: s.n }), acc: Math.round(s.acc * 100), n: s.n,
+        start: `data-ph-fams="${m.fams.join(",")}" data-level="${level}"`, lesson: `data-ph-lesson="${m.lesson}"`, levelNote: tr(level === "simple" ? "rec.guided" : "rec.normal") };
+    }
+    const untried = CT().LESSONS.find((l) => l.families.length && !rs.some((r) => l.families.includes(r.family)));
+    if (untried) return { topic: loc(untried.title), why: tr("rec.notTried"), acc: null, n: 0, start: `data-ph-fams="${untried.families.filter((f) => B().byFam(f)).join(",")}" data-level="normal"`, lesson: `data-ph-lesson="${untried.id}"`, levelNote: tr("rec.normal") };
+    const lowest = CT().LESSONS.filter((l) => l.families.length).map((l) => ({ l, a: acc(rs.filter((r) => l.families.includes(r.family))) })).sort((x, y) => x.a - y.a)[0];
+    return lowest ? { topic: loc(lowest.l.title), why: tr("rec.ph.lowest", { pct: lowest.a }), acc: lowest.a, n: rs.filter((r) => lowest.l.families.includes(r.family)).length, start: `data-ph-fams="${lowest.l.families.join(",")}" data-level="challenge"`, lesson: `data-ph-lesson="${lowest.l.id}"`, levelNote: tr("rec.stretch") } : null;
+  }
+  // share of the tested Physics subtopics with at least one of your answers (coverage, not mastery)
+  function coverage() {
+    const rs = recs(), tested = C().coverage().filter((c) => c.status === "tested");
+    return tested.length ? Math.round((tested.filter((c) => rs.some((r) => r.sub === c.id || (r.subs || []).includes(c.id))).length / tested.length) * 100) : 0;
+  }
+  function barTopics() {
+    const rs = recs();
+    return DRILL_GROUPS.map(([k, ids]) => {
+      const rows = ids.map((id) => CT().get(id)).filter(Boolean).map((l) => {
+        const mine = rs.filter((r) => l.families.includes(r.family)), a = acc(mine);
+        const fams = l.families.filter((f) => B().byFam(f)), at = (m) => fams.filter((f) => B().byFam(f).modes.includes(m));
+        const st = !mine.length ? tr("ph.st.none") : mine.length < 3 ? tr("ph.few", { n: mine.length }) : a >= 85 ? tr("ph.st.strong") : a >= 60 ? tr("ph.st.developing") : tr("ph.st.needs");
+        return `<li class="bar-row" data-find="${esc((loc(l.title) + " " + tr(k)).toLowerCase())}"><span class="br-t"><b>${esc(loc(l.title))}</b><small>${esc(st)}${a === null ? "" : ` · ${a}%`}</small></span>
+          <span class="br-acts">${at("simple").length ? `<button type="button" class="btn btn-sm btn-secondary" data-ph-fams="${at("simple").join(",")}" data-level="simple">${esc(tr("bar.guided"))}</button>` : ""}${at("normal").length ? `<button type="button" class="btn btn-sm btn-primary" data-ph-fams="${at("normal").join(",")}" data-level="normal">${esc(tr("bar.practise"))}</button>` : ""}<button type="button" class="btn btn-sm btn-link" data-ph-lesson="${l.id}">${esc(tr("prac.lesson"))}</button></span></li>`;
+      }).join("");
+      return rows ? `<div class="bar-group"><h3>${esc(tr(k))}</h3><ul class="bar-list">${rows}</ul></div>` : "";
+    }).join("");
+  }
+
+  window.PhysHome = { welcome, topicCard, cardDesc, preview, activity, goals, concepts, stats, studioPlus, drills, progress, review, summary, recommend, barTopics, coverage };
 })();

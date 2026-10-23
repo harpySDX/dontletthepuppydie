@@ -10,9 +10,11 @@ screen is the exam.
   workspace. Physics fills it with its own content (`js/physics/home.js`): projectile-motion greeting and topic,
   Physics test previews and options, Physics sessions, lesson goals and skill stats. The old separate Physics home
   (lesson path, embedded Projectile Explorer, tool cards) is gone; the Lab is still available as an optional
-  destination ("Lab (optional)" in Quick actions and the island), never as a step before a test.
-- **Tests.** Normal, Challenging and Nightmare in both subjects run in the same test screen (timer, pause, question
-  navigator, flags, calculator, scratchpad, submit, results, review). Simple is guided practice in both.
+  destination (The Bar → Labs, optional), never as a step before a test.
+- **Tests.** Simple, Normal, Challenging and Nightmare in both subjects run in the same test screen (timer, pause,
+  question navigator, flags, calculator, scratchpad, submit, results, review). Simple is an easier assessment
+  (friendlier values, shorter reasoning), not a tutorial; guided practice lives in The Bar. The café scene is
+  hidden during every test.
 
 ## What an active test shows
 
@@ -70,6 +72,6 @@ Equations accept any equivalent form unless vertex form is asked for.
 
 - `tests/e2e/exam.js` (31 checks): shared home for Physics, test from the home without labs, no stray controls in
   active Math and Physics tests, topic hidden until review, formula panels, Settings help hidden, hints opt-in and
-  never in Nightmare, Simple still guided, Lab still optional, transformations in Simple practice, the course map and
+  never in Nightmare, Simple a timed assessment, Lab still optional (The Bar), transformations in The Bar, the course map and
   the Math unit test (still 34 marks), Studio+ and phone.
 - `tests/transform.test.js` (7 tests) and the blueprint test in `tests/physics.test.js`.
