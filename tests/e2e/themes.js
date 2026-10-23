@@ -1,8 +1,11 @@
 // Browser checks for themes: the picker, live switching, persistence, System following the OS, no seasonal
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // auto-switching, and every theme across Math and Physics screens in all layouts (no errors, no overflow,
 // readable text by measured contrast).
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/themes.js
 const { chromium } = require("playwright");
+const { evalNav, toTake, pickSubject } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const SHOTS = process.env.SHOTS; // optional folder for screenshots
@@ -10,7 +13,7 @@ const results = []; const errors = [];
 const ok = (n, c, x = "") => { results.push({ n, pass: !!c }); console.log((c ? "PASS " : "FAIL ") + n + (x ? "  — " + x : "")); };
 const vis = (p, s) => p.locator(s).first().isVisible().catch(() => false);
 const DONE = { site: "completed", test: "completed", game: "completed" };
-const ALL = ["light", "dark", "system", "cinnamon", "blush", "galaxy", "arctic", "beach", "halloween", "christmas", "graphite", "lime"];
+const ALL = ["cafe", "light", "dark", "system", "cinnamon", "blush", "galaxy", "arctic", "beach", "halloween", "christmas", "graphite", "lime"];
 
 // measured contrast of visible text against the colour actually behind it (alpha layers blended down to the page)
 const CONTRAST = () => {
@@ -56,20 +59,20 @@ const CONTRAST = () => {
     if (opts.clock) await p.clock.setFixedTime(opts.clock);
     await p.addInitScript((seed) => { if (!sessionStorage.getItem("i")) { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v)); sessionStorage.setItem("i", 1); } }, { "campfire-prep.onboarding.v1": DONE, "campfire-prep.prefs.v1": { mode: "normal" }, ...seed });
     await p.goto(BASE); await p.waitForTimeout(200);
-    if (!opts.title) { await p.click("#btn-enter"); await p.waitForTimeout(250); }
+    if (!opts.title) { await enterIf(p); await p.waitForTimeout(250); }
     return p;
   };
   const attr = (p) => p.evaluate(() => ({ theme: document.documentElement.dataset.theme, tone: document.documentElement.dataset.tone, bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, saved: JSON.parse(localStorage.getItem("campfire-prep.ui.v1") || "{}").theme }));
   const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  const nav = async (p, go) => { await p.evaluate((go) => document.querySelector(`#main-nav [data-go="${go}"]`).click(), go); await p.waitForTimeout(220); };
+  const nav = (p, go) => evalNav(p, go, 220);
 
   // ── 1. picker
   let p = await mk();
   await p.click("#btn-settings"); await p.waitForTimeout(150);
   const cards = await p.$$eval("#set-theme [data-theme-opt]", (xs) => xs.map((x) => ({ id: x.dataset.themeOpt, name: x.querySelector(".th-name").textContent.trim(), dots: x.querySelectorAll(".th-dots i").length, prev: !!x.querySelector(".th-prev"), checked: x.getAttribute("aria-checked"), role: x.getAttribute("role") })));
-  ok("Settings list twelve themes in order", JSON.stringify(cards.map((c) => c.id)) === JSON.stringify(ALL), cards.map((c) => c.id).join(","));
+  ok("Settings list thirteen themes in order (Study Café first)", JSON.stringify(cards.map((c) => c.id)) === JSON.stringify(ALL), cards.map((c) => c.id).join(","));
   ok("Each card has a name, a mini preview and four palette swatches", cards.every((c) => c.name && c.prev && c.dots === 4));
-  ok("Cards are radio buttons; Light Glass selected by default", cards.every((c) => c.role === "radio") && cards.filter((c) => c.checked === "true").map((c) => c.id).join() === "light");
+  ok("Cards are radio buttons; Study Café selected by default", cards.every((c) => c.role === "radio") && cards.filter((c) => c.checked === "true").map((c) => c.id).join() === "cafe");
   ok("Seasonal themes are labelled as seasonal", /Seasonal/.test(cards.find((c) => c.id === "halloween").name) && /Seasonal/.test(cards.find((c) => c.id === "christmas").name) && !/Seasonal/.test(cards.find((c) => c.id === "galaxy").name));
   const prevBg = await p.$$eval("#set-theme .th-prev", (xs) => xs.map((x) => getComputedStyle(x).backgroundColor + getComputedStyle(x).backgroundImage));
   ok("Each preview shows its own colours", new Set(prevBg).size >= 11, String(new Set(prevBg).size));
@@ -95,19 +98,19 @@ const CONTRAST = () => {
   ok("Theme persists after a browser restart", (await attr(p)).theme === "galaxy");
   await ctx2.close();
   p = await mk({ "campfire-prep.ui.v1": { theme: "neon-unicorn" } });
-  ok("An unknown saved theme falls back to Light Glass", (await attr(p)).theme === "light");
+  ok("An unknown saved theme falls back to the default (Study Café)", (await attr(p)).theme === "cafe");
   await p.context().close();
 
   // ── 3. System follows the OS, live; seasonal themes never switch on by date
   p = await mk({ "campfire-prep.ui.v1": { theme: "system" } }, { scheme: "dark" });
   ok("System: dark OS → dark tone", (await attr(p)).tone === "dark");
   await p.emulateMedia({ colorScheme: "light" }); await p.waitForTimeout(150);
-  ok("System: follows a live OS change to light", (await attr(p)).tone === "light");
+  { const t0 = Date.now(); let tn = ""; for (let i = 0; i < 40 && (tn = (await attr(p)).tone) !== "light"; i++) await p.waitForTimeout(50); ok("System: follows a live OS change to light", tn === "light", `${Date.now() - t0 + 150} ms`); }
   ok("System: the saved choice stays 'system'", (await attr(p)).saved === "system");
   await p.context().close();
   for (const day of ["2026-10-31T12:00:00", "2026-12-25T12:00:00"]) {
     p = await mk({}, { clock: new Date(day) });
-    ok(`No automatic seasonal theme on ${day.slice(0, 10)}`, (await attr(p)).theme === "light");
+    ok(`No automatic seasonal theme on ${day.slice(0, 10)}`, (await attr(p)).theme === "cafe");
     await p.context().close();
   }
 
@@ -120,19 +123,21 @@ const CONTRAST = () => {
     const check = async (screen) => { const c = await p.evaluate(CONTRAST); measured += c.n; for (const x of c.bad) report.push(screen + ": " + x); if ((await overflow(p)) > 0) report.push(screen + ": horizontal overflow"); if (SHOTS && ["home", "physrun", "test"].includes(screen)) await p.screenshot({ path: `${SHOTS}/th-${id}-${screen}.png` }); };
     await check("home");
     await p.click("#btn-settings"); await p.waitForTimeout(120); await check("settings"); await p.keyboard.press("Escape"); await p.waitForTimeout(80);
+    await nav(p, "bar"); await check("bar");
     await nav(p, "library"); await check("library");
     await nav(p, "practice"); await check("practice");
+    await nav(p, "progress"); await check("diagnostics");
     await nav(p, "home");
-    await p.evaluate(() => { document.querySelector('#mode-track [data-mode="normal"]').click(); document.querySelector("#btn-start").click(); }); await p.waitForTimeout(600);
+    await toTakeIf(p); await p.evaluate(() => { document.querySelector('#mode-track [data-mode="normal"]').click(); document.querySelector("#btn-start").click(); }); await p.waitForTimeout(600);
     if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(400); }
     await p.click("#tools-btn"); await p.waitForTimeout(80); await p.click('#tools-menu [data-tool="calc"]'); await p.waitForTimeout(120);
     await check("test");
     await p.keyboard.press("Escape");
     await p.click("#btn-quit").catch(() => {}); await p.waitForTimeout(150); if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(250); }
-    await p.click("#subject-btn"); await p.click('#subject-menu [data-subject="physics"]'); await p.waitForTimeout(300);
+    await pickSubject(p, "physics", 300);
     await check("physhome");
     await p.evaluate(() => window.PhysUI.startRun({ subs: ["PC.angled_same"], n: 5 })); await p.waitForTimeout(300); await check("physrun");
-    await nav(p, "studyroom"); await check("physlab");
+    await nav(p, "library"); await p.click('#phys-root [data-ph-ltab="labs"]'); await p.waitForTimeout(250); await check("physlab");
     const figOk = await p.evaluate(() => { const path = document.querySelector('[data-tool-host="explorer"] .pf-curve, [data-tool-host="explorer"] .pf-path, [data-tool-host="explorer"] .pt-done'); return path ? getComputedStyle(path).stroke : "none"; });
     ok(`${id} (${layout}): screens render with no overflow and readable text (${measured} text nodes measured)`, report.length === 0, report.slice(0, 6).join(" | "));
     ok(`${id}: physics simulation uses the theme's colours`, figOk !== "none" && figOk !== "", figOk);

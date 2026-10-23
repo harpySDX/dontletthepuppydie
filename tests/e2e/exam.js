@@ -1,8 +1,11 @@
 // Exam-first checks: Physics uses the same home screen and test interface as Precalculus, active tests show only
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // exam controls (no subject switcher, menus, labs, topic names, method-revealing formulas or tours), hints are off
 // unless allowed, Math tests include quadratic transformations, and both subjects keep separate data.
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/exam.js
 const { chromium } = require("playwright");
+const { evalNav, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const SHOTS = process.env.SHOTS;
@@ -20,7 +23,7 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
     p.on("console", (m) => { if (m.type() === "error" && !/ERR_TUNNEL|favicon|503|fonts/.test(m.text())) errors.push(m.text()); });
     await p.addInitScript((seed) => { if (!sessionStorage.getItem("i")) { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v)); sessionStorage.setItem("i", 1); } }, { "campfire-prep.onboarding.v1": DONE, "campfire-prep.prefs.v1": { mode: "normal" }, ...seed });
     await p.goto(BASE); await p.waitForTimeout(250);
-    await p.click("#btn-enter"); await p.waitForTimeout(400);
+    await enterIf(p); await p.waitForTimeout(400);
     return p;
   };
   const screen = (p) => p.evaluate(() => document.body.dataset.screen);
@@ -37,13 +40,16 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
 
   // ── 1. Physics uses the Precalculus home screen
   let p = await mk({ "campfire-prep.subject.v1": "physics" });
-  ok("Physics home is the shared home screen", (await screen(p)) === "home" && await vis(p, "#screen-home #mode-track") && !(await vis(p, "#screen-phys")));
+  ok("Physics home is the shared café home", (await screen(p)) === "home" && await vis(p, "#screen-home #hub-subjects") && !(await vis(p, "#screen-phys")));
+  await toTake(p);
+  ok("Take a Test is the same page for Physics", (await screen(p)) === "take" && await vis(p, "#screen-take #mode-track"));
   ok("Same four difficulty cards and preview as Precalculus", (await p.locator("#mode-track .mode-card").count()) === 4 && await vis(p, "#mode-preview #btn-start") && await vis(p, "#mode-preview #btn-create"));
-  ok("Physics content: greeting, current topic, quick actions", /projectile/i.test(await p.textContent("#home-greeting")) && /Projectile motion/.test(await p.textContent("#topic-card")) && /Lab \(optional\)/.test(await p.textContent("#dash .quick")) && /Lessons/.test(await p.textContent("#dash .quick")));
+  await p.click('#main-nav [data-go="home"]'); await p.waitForTimeout(300);
+  ok("Physics content: the recommendation names Physics; no Quick actions panel", /Physics 11/.test(await p.textContent("#topic-card")) && /Projectile motion/.test(await p.textContent("#topic-card")) && !(await vis(p, "#dash .quick")));
   ok("No lab, explorer or lesson path on the Physics home", !(await vis(p, "[data-tool-host]")) && !(await vis(p, ".ph-path")) && !(await vis(p, ".ph-tool-cards")));
   ok("Preview example is a real generated Physics question", /g = 9\.81|m\/s/.test(await p.textContent("#mode-preview .mp-ex-q")));
   if (SHOTS) await p.screenshot({ path: SHOTS + "/ex-phys-home.png" });
-  await p.click("#mode-preview #btn-start"); await p.waitForTimeout(900);
+  await toTakeIf(p); await p.click("#mode-preview #btn-start"); await p.waitForTimeout(900);
   let s = await sess(p);
   ok("Start (no lab, no tutorial first) opens a real Physics test", (await screen(p)) === "test" && s && s.subject === "physics" && s.level === "normal");
   ok("Active Physics test: no subject switcher, island menu or other navigation", !(await vis(p, "#subject-btn")) && !(await vis(p, "#main-nav")) && (await stray(p)).length === 0, JSON.stringify(await stray(p)));
@@ -61,19 +67,19 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
   await p.click("#btn-submit"); await p.waitForTimeout(150); await p.click("#dialog-ok"); await p.waitForTimeout(700);
   ok("Review shows each question's topic after submitting", (await screen(p)) === "results" && (await p.locator("#review-list .topic-tag").count()) > 0);
   await p.click("#btn-home"); await p.waitForTimeout(400);
-  ok("Back home: the finished Physics test is in Recent activity", /Physics test/.test(await p.textContent("#activity")));
+  ok("Back home: the finished Physics test counts in the subject card", /[1-9]\d*% of topics practised/.test(await p.textContent("#hub-subjects .s-physics")));
   await p.context().close();
 
   // ── 2. Studio layout: a general formula sheet for Physics, nothing question-specific for Math
   p = await mk({ "campfire-prep.subject.v1": "physics", "campfire-prep.ui.v1": { layout: "studio" } });
-  await p.click("#mode-preview #btn-start"); await p.waitForTimeout(900);
+  await toTakeIf(p); await p.click("#mode-preview #btn-start"); await p.waitForTimeout(900);
   const sheet1 = await p.textContent("#test-info");
   await p.click("#btn-next"); await p.waitForTimeout(200);
   const sheet2 = await p.textContent("#test-info");
   ok("Physics (Studio): the formula sheet is the same for every question", /Formula sheet/.test(sheet1) && sheet1 === sheet2);
   await p.context().close();
   p = await mk({ "campfire-prep.ui.v1": { layout: "studio" } });
-  await p.evaluate(() => { document.querySelector('#mode-track [data-mode="normal"]').click(); document.querySelector("#btn-start").click(); }); await p.waitForTimeout(900);
+  await toTakeIf(p); await p.evaluate(() => { document.querySelector('#mode-track [data-mode="normal"]').click(); document.querySelector("#btn-start").click(); }); await p.waitForTimeout(900);
   ok("Math (Studio): no question-specific formulas during the test", (await p.textContent("#test-info")).trim() === "");
   ok("Math test: topic hidden and hints off by default too", !(await vis(p, "#q-topic")) && !(await vis(p, "#btn-hint")));
   ok("Math test: same exam controls (no stray navigation)", (await stray(p)).length === 0, JSON.stringify(await stray(p)));
@@ -85,31 +91,36 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
 
   // ── 3. Hints only when allowed in Test options; never in Nightmare
   p = await mk({ "campfire-prep.subject.v1": "physics" });
-  await p.click("#mode-preview #btn-create"); await p.waitForTimeout(250);
+  await toTakeIf(p); await p.click("#mode-preview #btn-create"); await p.waitForTimeout(250);
   ok("Test options offer 'Allow hints' (off by default)", await vis(p, "#s-hints") && !(await p.isChecked("#s-hints")));
   await p.check("#s-hints"); await p.click("#s-go"); await p.waitForTimeout(900);
   ok("With hints allowed, Normal shows the hint button", (await screen(p)) === "test" && await vis(p, "#btn-hint") && (await sess(p)).hints === true);
   await p.click("#btn-quit"); await p.waitForTimeout(120); await p.click("#dialog-ok"); await p.waitForTimeout(300);
-  await p.evaluate(() => document.querySelector('#mode-track [data-mode="nightmare"]').click()); await p.waitForTimeout(200);
-  await p.click("#mode-preview #btn-create"); await p.waitForTimeout(250);
+  await toTakeIf(p); await p.evaluate(() => document.querySelector('#mode-track [data-mode="nightmare"]').click()); await p.waitForTimeout(200);
+  await toTakeIf(p); await p.click("#mode-preview #btn-create"); await p.waitForTimeout(250);
   ok("Nightmare: 'Allow hints' is disabled", await p.isDisabled("#s-hints"));
   await p.click("#s-go"); await p.waitForTimeout(400); if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(800); }
   ok("Nightmare never shows hints, even with the preference on", (await screen(p)) === "test" && !(await vis(p, "#btn-hint")));
   await p.context().close();
 
-  // ── 4. Simple stays guided practice (not a test); labs remain optional elsewhere
+  // ── 4. Simple is an easier assessment under exam conditions; labs remain optional, in The Bar
   p = await mk({ "campfire-prep.subject.v1": "physics", "campfire-prep.prefs.v1": { mode: "simple" } });
-  ok("Simple preview starts guided practice", /guided/i.test(await p.textContent("#mode-preview #btn-start")));
-  await p.click("#mode-preview #btn-start"); await p.waitForTimeout(500);
-  ok("Simple opens the guided runner, not a timed test", (await screen(p)) === "phys" && !(await sess(p)));
-  await p.evaluate(() => document.querySelector('#main-nav [data-go="studyroom"]').click()); await p.waitForTimeout(300);
-  ok("The Lab is still available as an optional tool", await vis(p, '[data-tool-host="explorer"] svg'));
+  ok("Simple preview starts a Simple test", /Simple test/i.test(await p.textContent("#mode-preview #btn-start")));
+  await toTakeIf(p); await p.click("#mode-preview #btn-start"); await p.waitForTimeout(800);
+  const ss = await sess(p);
+  ok("Simple opens a timed test (answered independently, marked at the end)", (await screen(p)) === "test" && ss && ss.level === "simple" && await vis(p, "#timer") && !(await vis(p, "#btn-hint")) && !(await vis(p, ".ph-scaffold")));
+  ok("Simple test shows only exam controls", (await stray(p)).length === 0, JSON.stringify(await stray(p)));
+  await p.click("#btn-quit"); await p.waitForTimeout(150); if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(300); }
+  await evalNav(p, "bar", 300);
+  await p.click('#bar-body .bar-item[data-go-arg="labs"]'); await p.waitForTimeout(400);
+  ok("The Lab is still available as an optional tool (The Bar → Labs)", await vis(p, '[data-tool-host="explorer"] svg'));
   await p.context().close();
 
   // ── 5. Math curriculum: transformations in Simple practice and the course map
   p = await mk({ "campfire-prep.prefs.v1": { mode: "simple" } });
-  ok("Math Simple offers horizontal stretches as a skill", /Horizontal stretches and compressions/.test(await p.textContent("#simple-skill")));
-  await p.evaluate(() => document.querySelector('#main-nav [data-go="practice"]').click()); await p.waitForTimeout(300);
+  await evalNav(p, "bar", 300);
+  ok("The Bar offers horizontal stretches as a topic (Guided and Practise)", await p.evaluate(() => { const r = [...document.querySelectorAll("#bar-topics .bar-row")].find((x) => /Horizontal stretches and compressions/.test(x.textContent)); return !!(r && r.querySelector('[data-level="simple"]') && r.querySelector('[data-level="normal"]')); }));
+  await evalNav(p, "practice", 300);
   await p.evaluate(() => { const t = [...document.querySelectorAll('[data-tabs] [data-go="course"]')].find((x) => x.offsetParent); if (t) t.click(); }); await p.waitForTimeout(400);
   const course = await p.evaluate(() => document.body.innerText);
   ok("Course map lists the four transformation subtopics", ["Vertical stretches, compressions and reflections", "Horizontal stretches and compressions", "Translations: reading h and k", "Combined transformations"].every((t) => course.includes(t)));

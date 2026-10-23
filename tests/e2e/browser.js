@@ -1,4 +1,5 @@
 // Browser end-to-end checks for the learning platform (run against tests/e2e/devserver.js, AI mocked).
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // Usage: node tests/e2e/devserver.js &  then  node tests/e2e/browser.js
 const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
@@ -11,18 +12,9 @@ const visible = (page, sel) => page.locator(sel).first().isVisible().catch(() =>
 const lastReq = () => JSON.parse(fs.readFileSync(path.join(OUT, "last-request.json")));
 const DAY = 86400000;
 let page;
-// the island holds Home · Practice · Concepts · Study Room; Review / Study plan / Progress are tabs inside Practice
-async function nav(where) {
-  const top = ["home", "practice", "library", "studyroom"];
-  if (top.includes(where)) {
-    if ((await page.getAttribute("#brand-link", "aria-expanded")) !== "true") { await page.click("#brand-link"); await page.waitForTimeout(120); }
-    await page.click(`#main-nav [data-go="${where}"]`);
-  } else {
-    await nav("practice");
-    await page.click(`.screen:not([hidden]) [data-tabs] [data-go="${where}"]`);
-  }
-  await page.waitForTimeout(350);
-}
+const { go, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
+async function nav(where) { await go(page, where, 350); }
 
 (async () => {
   const browser = await chromium.launch();
@@ -32,27 +24,33 @@ async function nav(where) {
   page.on("console", (m) => { if (m.type() === "error" && !/favicon|404|ERR_TUNNEL|503/.test(m.text())) errors.push("console: " + m.text()); });
   await page.addInitScript(() => { if (!sessionStorage.getItem("init")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); sessionStorage.setItem("init", "1"); } });
   await page.goto(BASE); await page.waitForTimeout(400);
-  ok("Start screen: tutor hidden", !(await visible(page, "#tutor-launcher")));
-  await page.click("#btn-enter"); await page.waitForTimeout(300);
+  ok("Opens on the café home (no start screen); tutor hidden until wanted", (await page.evaluate(() => document.body.dataset.screen)) === "home" && !(await visible(page, "#btn-enter")));
+  await enterIf(page); await page.waitForTimeout(300);
+  await toTake(page);
+  ok("Shell: the top bar holds Home · Tests · Game · The Bar · Diagnostics", (await page.$$eval("#main-nav [data-go]", (b) => b.map((x) => x.dataset.go).join())) === "home,take,game,bar,progress" && await visible(page, "#main-nav") && await page.evaluate(() => document.getElementById("island").classList.contains("pinned")));
+  await page.setViewportSize({ width: 800, height: 900 }); await page.waitForTimeout(200);
   await page.click("#brand-link"); await page.waitForTimeout(150);
-  ok("Shell: island expands to 4 destinations", (await page.locator("#main-nav [data-go]").count()) === 4 && await visible(page, "#main-nav") && (await page.getAttribute("#brand-link", "aria-expanded")) === "true");
+  ok("Narrow screens: island expands on demand", await visible(page, "#main-nav") && (await page.getAttribute("#brand-link", "aria-expanded")) === "true");
   await page.keyboard.press("Escape"); await page.waitForTimeout(150);
   ok("Island collapses on Escape and returns focus", (await page.getAttribute("#brand-link", "aria-expanded")) === "false" && (await page.evaluate(() => document.activeElement.id)) === "brand-link");
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(200);
+  await go(page, "home");
   ok("Tutor launcher visible on Basecamp", await visible(page, "#tutor-launcher"));
   const lb = await page.locator("#tutor-launcher").boundingBox();
   ok("Launcher is a small circle in the bottom-right corner", lb && Math.abs(lb.width - lb.height) < 1 && lb.width <= 60 && 1440 - (lb.x + lb.width) <= 24 && 900 - (lb.y + lb.height) <= 24);
   const modes = await page.$$eval("#mode-track [data-mode]", (els) => els.map((e) => e.dataset.mode));
   ok("Difficulty carousel: exactly Simple, Normal, Challenging, Nightmare", modes.join(",") === "simple,normal,challenge,nightmare", modes.join(","));
   ok("No Tim's Test and no Nightmare tiers on Home", !/Tim/.test(await page.textContent("#screen-home")) && !/Tier|Brutal|Catastrophic/.test(await page.textContent("#screen-home")));
-  await page.click('#mode-track [data-mode="nightmare"]'); await page.waitForTimeout(200);
-  ok("Previewing a mode starts nothing", await visible(page, "#screen-home") && /Nightmare/.test(await page.textContent("#mode-preview")) && !(await page.evaluate(() => localStorage.getItem("campfire-prep.session.v2"))));
-  ok("Home shows no invented stats on first use", !/\d+%/.test(await page.textContent("#stats-panel")) && /Nothing yet/i.test(await page.textContent("#activity")));
-  await page.click('#mode-track [data-mode="simple"]');
+  await toTakeIf(page); await page.click('#mode-track [data-mode="nightmare"]'); await page.waitForTimeout(200);
+  ok("Previewing a mode starts nothing", await visible(page, "#screen-take") && /Nightmare/.test(await page.textContent("#mode-preview")) && !(await page.evaluate(() => localStorage.getItem("campfire-prep.session.v2"))));
+  await go(page, "home");
+  ok("Home shows no invented stats on first use (subjects at 0% practised, a baseline instead of a recommendation)", (await page.locator("#hub-subjects .subj-card").count()) === 2 && /0% of topics practised[\s\S]*0% of topics practised/.test(await page.textContent("#hub-subjects")) && /Set a baseline/.test(await page.textContent("#topic-card")));
+  await toTakeIf(page); await page.click('#mode-track [data-mode="simple"]');
 
   // ── My Learning with no data: honest empty state
   await nav("learning");
   const mlEmpty = await page.textContent("#ml-body");
-  ok("My Learning (no data): onboarding, no invented percentages", /No learning records yet/.test(mlEmpty) && !/\d+%/.test(mlEmpty));
+  ok("My Learning (no data): onboarding, no invented percentages", /No learning records yet/.test(mlEmpty) && !/\d+%/.test(mlEmpty), (mlEmpty.match(/.{0,60}\d+%.{0,20}/) || [""])[0] + " | " + mlEmpty.slice(0, 80));
   await nav("review");
   ok("Review (no data): empty states for reviews and notebook", /Nothing to review yet/.test(await page.textContent("#rv-body")) && /notebook is empty/i.test(await page.textContent("#rv-body")));
 
@@ -135,9 +133,7 @@ async function nav(where) {
   await page.evaluate(() => { const k = "campfire-prep.practice.v1"; const a = JSON.parse(localStorage.getItem(k)); for (const p of a) p.date -= 3 * 86400000; localStorage.setItem(k, JSON.stringify(a)); });
   await nav("home"); await nav("review");
   ok("Due reviews appear after the interval passes", /Start today's review/.test(await page.textContent("#rv-body")));
-  await page.click("#brand-link"); await page.waitForTimeout(150);
-  ok("Island badge shows the number due", await visible(page, "#nav-review-badge") && Number(await page.textContent("#nav-review-badge")) > 0);
-  await page.keyboard.press("Escape");
+  ok("Island badge on Progress shows the number due", await visible(page, "#nav-progress-badge") && Number(await page.textContent("#nav-progress-badge")) > 0);
   await page.click('[data-rv="start"]'); await page.waitForTimeout(300);
   let n = 0;
   while (await page.locator('#rv-body [data-pr="check"]').count() && n < 12) {
@@ -199,8 +195,8 @@ async function nav(where) {
 
   // ── tests: tutor exclusion and lock
   await nav("home");
-  await page.click('#mode-track [data-mode="normal"]'); await page.waitForTimeout(200);
-  await page.click("#btn-start"); await page.waitForTimeout(600);
+  await toTakeIf(page); await page.click('#mode-track [data-mode="normal"]'); await page.waitForTimeout(200);
+  await toTakeIf(page); await page.click("#btn-start"); await page.waitForTimeout(600);
   ok("Test running: tutor and nav hidden", !(await visible(page, "#tutor")) && !(await visible(page, "#main-nav")));
   ok("Normal test: 20 quadratics questions in 3 sections", (await page.locator("#nav-grid .nav-cell").count()) === 20 && (await page.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.session.v2")).items.every((i) => /^qd-|^cb-1-ft_/.test(i.qid))))); // ft_ = quadratic transformations
   await page.evaluate(() => { location.hash = "#c-radicals.simplify"; }); await page.waitForTimeout(300);
@@ -216,7 +212,7 @@ async function nav(where) {
   ok("Paused test: tutor locked on Review too", await page.locator("#tutor.locked").count() === 1);
   await nav("home");
   await page.evaluate(() => history.replaceState(null, "", location.pathname)); await page.reload(); await page.waitForTimeout(600);
-  if (await visible(page, "#btn-enter")) { await page.click("#btn-enter"); await page.waitForTimeout(300); }
+  await enterIf(page);
   ok("Paused test after reload: still locked", await page.locator("#tutor.locked").count() === 1);
   await page.evaluate(() => window.Tutor.open({ prompt: "hi", send: true })); await page.waitForTimeout(200);
   ok("Programmatic Tutor.open blocked while paused", !(await visible(page, "#tutor-panel")));
@@ -236,7 +232,8 @@ async function nav(where) {
 
   // ── tour hides the tutor
   await page.click("#btn-home"); await page.waitForTimeout(300);
-  await page.click("#btn-tour-2"); await page.waitForTimeout(500);
+  await page.click("#btn-settings"); await page.waitForTimeout(150);
+  await page.click('#settings-pop [data-onboard="site"]'); await page.waitForTimeout(500);
   ok("Tour: tutor hidden", !(await visible(page, "#tutor-launcher")));
   await page.click("#tour-skip"); await page.waitForTimeout(400);
   ok("After tour: tutor back", await page.locator("#tutor-launcher").waitFor({ state: "visible", timeout: 3000 }).then(() => true, () => false));

@@ -397,3 +397,21 @@ test("formula reference: complete entries that render, with examples that check 
     for (const r of f.related) assert.ok(ids.has(r), `${f.id} → ${r}`);
   }
 });
+
+// Simple is an easier ASSESSMENT (not a tutorial): 24 marks, every question generated at Simple, keys verified
+test("Simple test: 24 marks of Simple-level questions in the unit-test layout", () => {
+  const r = seeded(424242);
+  for (let i = 0; i < 40; i++) {
+    const t = B.buildTest("simple", r);
+    const marks = t.wr.reduce((a, q) => a + q.parts.reduce((x, p) => x + p.marks, 0), 0) + t.nr.length + t.mc.length;
+    assert.strictEqual(marks, 24);
+    assert.deepStrictEqual([t.wr.length, t.nr.length, t.mc.length], [4, 5, 10]);
+    for (const q of [...t.wr, ...t.nr, ...t.mc]) {
+      assert.strictEqual(q.meta.mode, "simple", q.id);
+      assert.ok(/-s-/.test(q.id), q.id);
+      if (q.c) assert.strictEqual(new Set(q.c).size, q.c.length, "distinct options " + q.id);
+    }
+    // Simple never borrows the Normal/Challenging-only families (completing the square, projectiles, optimisation)
+    for (const q of t.wr) assert.ok(!["cts", "projectile", "optimize", "solve", "zvertex"].includes(q.meta.family), q.meta.family);
+  }
+});

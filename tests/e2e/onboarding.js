@@ -1,6 +1,9 @@
 // Browser checks for onboarding: the site tour, the test-taking tutorial and the campfire minigame tutorial.
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/onboarding.js
 const { chromium } = require("playwright");
+const { evalNav, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const KEY = "campfire-prep.onboarding.v1";
@@ -40,16 +43,16 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
 
   // ── 1. first visit: the site tour is offered on Home; skipping at the start is remembered and never blocks the app
   let p = await mk();
-  await p.click("#btn-enter"); await p.waitForTimeout(500);
+  await enterIf(p); await p.waitForTimeout(500);
   ok("First visit: site tour opens on Home with a welcome card", (await step(p)) === "welcome" && (await p.evaluate(() => document.body.dataset.screen)) === "home");
   ok("Welcome offers the full tour, the essentials and Skip", /full tour/i.test(await p.textContent("#tour-next")) && await vis(p, '[data-tour-action="essentials"]') && /Skip/.test(await p.textContent("#tour-skip")));
   ok("Step counter shows position", /^1 of \d+$/.test((await p.textContent("#tour-count")).trim()));
   ok("Welcome never mentions the campfire minigame", !/campfire|log|puppy freezes/i.test(await p.textContent("#tour-card")));
   await p.click("#tour-skip"); await p.waitForTimeout(200);
   ok("Skip at the start closes the tour and records 'skipped'", !(await vis(p, "#tour")) && (await st(p)).site === "skipped");
-  await p.click('#mode-track [data-mode="challenge"]'); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="challenge"]'); await p.waitForTimeout(150);
   ok("App is fully usable after skipping", /Challenging/.test(await p.textContent("#mode-preview")));
-  await p.reload(); await p.waitForTimeout(400); await p.click("#btn-enter"); await p.waitForTimeout(400);
+  await p.reload(); await p.waitForTimeout(400); await enterIf(p); await p.waitForTimeout(400);
   ok("Skipped tour isn't forced again on the next visit", !(await p.evaluate(() => window.Tour.active)));
 
   // ── 2. replay from Settings → Help; essentials path; Escape midway; independent states
@@ -59,12 +62,12 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
   const essN = Number((await p.textContent("#tour-count")).match(/of (\d+)/)[1]);
   ok("'Just the essentials' is a short path", essN <= 7 && (await step(p)) === "nav", `${essN} steps`);
   ok("Island step: the island opens and is highlighted", await p.evaluate(() => document.querySelector("#island").classList.contains("open")) && await spotOn(p, "#island"));
-  await p.click('#main-nav [data-go="practice"]'); await p.waitForTimeout(300);
+  await evalNav(p, "practice", 300);
   ok("Island step is interactive: switching section works during the tour", (await p.evaluate(() => document.body.dataset.screen)) === "practice" && (await step(p)) === "nav");
   await p.click("#tour-next"); await p.waitForTimeout(500);
-  ok("Modes step returns Home and highlights the carousel", (await p.evaluate(() => document.body.dataset.screen)) === "home" && await spotOn(p, "#mode-track"));
-  await p.click('#mode-track [data-mode="nightmare"]'); await p.waitForTimeout(200);
-  ok("Selecting a mode during the tour only previews it", /Nightmare/.test(await p.textContent("#mode-preview")) && !(await p.evaluate(() => localStorage.getItem("campfire-prep.session.v2"))) && (await p.evaluate(() => document.body.dataset.screen)) === "home");
+  ok("Modes step opens Take a Test and highlights the carousel", (await p.evaluate(() => document.body.dataset.screen)) === "take" && await spotOn(p, "#mode-track"));
+  await toTakeIf(p); await p.click('#mode-track [data-mode="nightmare"]'); await p.waitForTimeout(200);
+  ok("Selecting a mode during the tour only previews it", /Nightmare/.test(await p.textContent("#mode-preview")) && !(await p.evaluate(() => localStorage.getItem("campfire-prep.session.v2"))) && (await p.evaluate(() => document.body.dataset.screen)) === "take");
   await p.click("#tour-next"); await p.waitForTimeout(400);
   ok("Settings step highlights the puppy button", (await step(p)) === "settings" && await spotOn(p, "#btn-settings"));
   await p.click("#btn-settings"); await p.waitForTimeout(500);
@@ -84,13 +87,13 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
 
   // ── 3. full site tour, every target present, card on screen, completion recorded; reload mid-tour resumes
   p = await mk();
-  await p.click("#btn-enter"); await p.waitForTimeout(500);
+  await enterIf(p); await p.waitForTimeout(500);
   const seen = [];
   for (let k = 0; k < 20 && (await p.evaluate(() => window.Tour.active)); k++) {
     const id = await step(p); seen.push(id);
     const miss = await p.locator(".tour-missing").count(), onScreen = await cardOnScreen(p);
     if (miss || !onScreen) ok(`Site step '${id}' has its target and an on-screen card`, false);
-    if (id === "library") { await p.reload(); await p.waitForTimeout(900); if (await vis(p, "#btn-enter")) await p.click("#btn-enter"); await p.waitForTimeout(700); ok("Reload mid-tour: Enter resumes at the same step", (await step(p)) === "library"); }
+    if (id === "library") { await p.reload(); await p.waitForTimeout(900); await enterIf(p);await p.waitForTimeout(700); ok("Reload mid-tour: reopening resumes at the same step", (await step(p)) === "library"); }
     await p.click("#tour-next"); await p.waitForTimeout(450);
   }
   ok("Full site tour visits every section in order", ["welcome", "dash", "activity", "nav", "modes", "preview", "library", "lesson", "settings", "language", "look", "tests", "room", "tools", "done"].every((x) => seen.includes(x)), seen.join(","));
@@ -101,9 +104,9 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
 
   // ── 4. test-taking tutorial: practice copy, live checking with the real engine, nothing recorded
   p = await mk({ [KEY]: { site: "completed" } });
-  await p.click("#btn-enter"); await p.waitForTimeout(300);
-  await p.click('#mode-track [data-mode="normal"]'); await p.waitForTimeout(150);
-  await p.click('#mode-preview [data-onboard="test"]'); await p.waitForTimeout(700);
+  await enterIf(p); await p.waitForTimeout(300);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click('#mode-preview [data-onboard="test"]'); await p.waitForTimeout(700);
   ok("Test tutorial opens from a mode's preview on a practice test", (await step(p)) === "intro" && (await p.evaluate(() => document.body.dataset.screen)) === "test");
   ok("Test tutorial shows no campfire minigame", !(await vis(p, ".buddy-panel")) && !(await vis(p, ".heat-panel")) && !(await vis(p, "#btn-fuel")));
   const ids = [];
@@ -125,20 +128,20 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
   const rec = await p.evaluate(() => ["campfire-prep.session.v2", "campfire-prep.history.v2", "campfire-prep.practice.v1"].map((k) => localStorage.getItem(k)));
   ok("Nothing from the practice copy is saved (no session, history or practice records)", rec.every((x) => x === null || x === "[]"), JSON.stringify(rec));
   ok("Test tutorial recorded separately; site state untouched", (await st(p)).test === "completed" && (await st(p)).site === "completed" && !(await st(p)).game);
-  ok("After the tutorial you're back where you started", (await p.evaluate(() => document.body.dataset.screen)) === "home");
+  ok("After the tutorial you're back where you started (Take a Test)", (await p.evaluate(() => document.body.dataset.screen)) === "take");
   await p.close();
 
   // ── 5. campfire minigame: first launch shows only the intro; clock held; one log; replay; no re-prompt after skip
   const startCamp = async (pg, extra = {}) => {
-    await pg.click('#mode-track [data-mode="normal"]'); await pg.click("#btn-create"); await pg.waitForTimeout(250);
+    await toTakeIf(pg); await pg.click('#mode-track [data-mode="normal"]'); await toTakeIf(pg); await pg.click("#btn-create"); await pg.waitForTimeout(250);
     await pg.check("#s-camp", { force: true });
     await pg.evaluate(() => { document.querySelector("#s-camp-custom").open = true; });
     if (extra.hardcore) await pg.check("#s-hardcore", { force: true });
     await pg.click("#s-go"); await pg.waitForTimeout(1100);
   };
   p = await mk({ [KEY]: { site: "completed" } }, { hash: "#debug" });
-  await p.click("#btn-enter"); await p.waitForTimeout(300);
-  await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-start"); await p.waitForTimeout(800);
+  await enterIf(p); await p.waitForTimeout(300);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(800);
   ok("A test without the campfire never shows the minigame tutorial", !(await p.evaluate(() => window.Tour.active)) && !(await st(p)).gameOpened);
   await quit(p);
   await startCamp(p, { hardcore: true });
@@ -172,7 +175,7 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
   await p.close();
 
   p = await mk({ [KEY]: { site: "completed" } }, { hash: "#debug" });
-  await p.click("#btn-enter"); await p.waitForTimeout(300);
+  await enterIf(p); await p.waitForTimeout(300);
   await startCamp(p);
   await p.click("#tour-skip"); await p.waitForTimeout(300);
   ok("'Skip tutorial and play' records skipped and the game runs", (await st(p)).game === "skipped" && await p.evaluate(() => !!window.__fire._raf));
@@ -180,7 +183,7 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
   await startCamp(p);
   ok("After skipping, later launches aren't interrupted", !(await p.evaluate(() => window.Tour.active)));
   await quit(p);
-  await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-create"); await p.waitForTimeout(250);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-create"); await p.waitForTimeout(250);
   await p.check("#s-camp", { force: true }); await p.click('[data-onboard="game-next"]'); await p.waitForTimeout(100);
   ok("Setup offers 'show the campfire tutorial when the test starts'", await vis(p, "#s-camp-tut-note"));
   await p.click("#s-go"); await p.waitForTimeout(1100);
@@ -191,7 +194,7 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
 
   // ── 6. phone width, reduced motion, keyboard
   p = await mk({}, { viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
-  await p.click("#btn-enter"); await p.waitForTimeout(500);
+  await enterIf(p); await p.waitForTimeout(500);
   let phoneOk = true;
   for (let k = 0; k < 16 && (await p.evaluate(() => window.Tour.active)); k++) {
     if (!(await cardOnScreen(p))) { phoneOk = false; console.log("  off-screen at", await step(p)); }
@@ -203,13 +206,14 @@ const cardOnScreen = (p) => p.evaluate(() => { const r = document.querySelector(
   await p.close();
 
   p = await mk({ [KEY]: { site: "completed" } });
-  await p.click("#btn-enter"); await p.waitForTimeout(300);
-  await p.focus('#btn-tour-2'); await p.keyboard.press("Enter"); await p.waitForTimeout(400);
+  await enterIf(p); await p.waitForTimeout(300);
+  await p.click("#btn-settings"); await p.waitForTimeout(150); // "How it works" lives in Settings → Help (Home no longer has a Quick actions panel)
+  await p.focus('#settings-pop [data-onboard="site"]'); await p.keyboard.press("Enter"); await p.waitForTimeout(400);
   ok("Keyboard: How it works opens the tour with focus on Next", (await step(p)) === "welcome" && (await p.evaluate(() => document.activeElement.id)) === "tour-next");
   await p.keyboard.press("Tab"); await p.keyboard.press("Tab"); await p.keyboard.press("Tab"); await p.keyboard.press("Tab"); await p.keyboard.press("Tab");
   ok("Keyboard: Tab stays inside the tour card", await p.evaluate(() => !!document.activeElement.closest("#tour-card")));
   await p.keyboard.press("Escape"); await p.waitForTimeout(150);
-  ok("Keyboard: Escape closes and focus returns to the opener", !(await p.evaluate(() => window.Tour.active)) && (await p.evaluate(() => document.activeElement.id)) === "btn-tour-2");
+  ok("Keyboard: Escape closes and focus returns to the opener", !(await p.evaluate(() => window.Tour.active)) && (await p.evaluate(() => document.activeElement.id)) === "btn-settings");
   await p.close();
 
   ok("No JS errors", errors.length === 0, errors.join(" | "));

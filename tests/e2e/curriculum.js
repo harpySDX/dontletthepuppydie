@@ -1,7 +1,9 @@
 // Browser checks for the curriculum engine: the Whole course screen, fixed difficulty, every new answer kind
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // answered through the real practice runner, the empty-grid graph builder, and library quizzes on new topics.
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/curriculum.js
 const { chromium } = require("playwright");
+const { evalNav } = require("./navhelp");
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const results = []; const errors = [];
@@ -18,11 +20,11 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
     p.on("console", (m) => { if (m.type() === "error" && !/ERR_TUNNEL|favicon|503|fonts/.test(m.text())) errors.push(m.text()); });
     await p.addInitScript((seed) => { if (!sessionStorage.getItem("i")) { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v)); sessionStorage.setItem("i", 1); } }, { "campfire-prep.onboarding.v1": DONE, ...seed });
     await p.goto(BASE); await p.waitForTimeout(300);
-    await p.click("#btn-enter"); await p.waitForTimeout(300);
+    await enterIf(p); await p.waitForTimeout(300);
     return p;
   };
   const toCourse = async (p) => {
-    await p.evaluate(() => document.querySelector('[data-go="practice"]').click()); await p.waitForTimeout(200);
+    await evalNav(p, "practice", 200);
     await p.click('.prac-tabs [data-go="course"] >> visible=true'); await p.waitForTimeout(250);
   };
   // answer the current practice question with its own key, through the real inputs
@@ -49,7 +51,7 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
   const disabledSimple = await p.locator("#course-body [data-course-sub][disabled]").count();
   const noSimple = await p.evaluate(() => window.Curriculum.coverage().filter((c) => !c.modes.includes("simple")).length);
   ok("Simple level: subtopics without Simple questions are disabled, not substituted", disabledSimple === noSimple, `${disabledSimple} disabled`);
-  await p.reload(); await p.waitForTimeout(300); await p.click("#btn-enter"); await p.waitForTimeout(250); await toCourse(p);
+  await p.reload(); await p.waitForTimeout(300); await enterIf(p); await p.waitForTimeout(250); await toCourse(p);
   ok("Course level choice is remembered", (await p.getAttribute('[data-course-mode="simple"]', "aria-checked")) === "true");
   await p.click('[data-course-mode="normal"]'); await p.waitForTimeout(150);
 
@@ -95,7 +97,7 @@ const DONE = { site: "completed", test: "completed", game: "completed" };
     let q; for (let s = 1; s < 50 && !q; s++) { try { q = window.Bank.make("f_graph_build", "wr", "normal", s); } catch { /* next */ } }
     window.__gq = q; return { a: q.parts[0].answer, id: q.id };
   });
-  await p.evaluate(() => document.querySelector('[data-go="practice"]').click()); await p.waitForTimeout(200);
+  await evalNav(p, "practice", 200);
   await p.evaluate(() => {
     const box = document.querySelector("#prac-run"); document.querySelector("#prac-body").hidden = true; box.hidden = false;
     window.Practice.run(box, { source: "drill", level: "normal", title: "Graph", items: [window.Practice.makeItem("wr", window.__gq, "a")], end: () => "<p>done</p>", onExit: () => {} });

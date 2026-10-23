@@ -1,7 +1,10 @@
 // Browser checks for the Studio+ layout: settings, persistence, data integrity, quick actions, viewport use,
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // empty vs populated states, the tour, and that test-taking is unaffected.
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/studioplus.js
 const { chromium } = require("playwright");
+const { evalNav, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const results = []; const errors = [];
@@ -35,7 +38,7 @@ const seedPractice = () => {
     await p.goto(BASE); await p.waitForTimeout(300);
     return p;
   };
-  const enter = async (p) => { await p.click("#btn-enter"); await p.waitForTimeout(350); };
+  const enter = async (p) => { await enterIf(p); await p.waitForTimeout(350); };
 
   // ── 1. settings offer four layouts; choosing Studio+ swaps the Home workspace and persists
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
@@ -134,7 +137,7 @@ const seedPractice = () => {
   const colsPlus = await testCols(p);
   ok("Tutor stays hidden during the test", !(await vis(p, "#tutor-launcher")));
   const pb = await mk({ "campfire-prep.ui.v1": { layout: "balanced" }, "campfire-prep.prefs.v1": { mode: "normal" } }); await enter(pb);
-  await pb.click("#btn-start");
+  await toTakeIf(pb); await pb.click("#btn-start");
   await pb.waitForTimeout(600);
   ok("Test layout under Studio+ matches Balanced", colsPlus === (await testCols(pb)), colsPlus);
   await pb.close();

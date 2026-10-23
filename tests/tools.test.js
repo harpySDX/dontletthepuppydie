@@ -10,6 +10,7 @@ require("../js/i18n-splus.js"); // Studio+ strings too
 require("../js/i18n-goose.js"); // Goose Mode strings
 require("../js/i18n-physics.js"); // Physics 11 strings
 require("../js/i18n-phystest.js"); // Physics test strings
+require("../js/i18n-cafe.js"); // Study Café strings (home, The Bar, accent, scene)
 
 const ev = (s, o) => Calc.evaluate(s, o);
 const val = (s, o) => { const r = ev(s, o); assert.ok(r.ok, `${s} → ${r.error}`); return r.value; };

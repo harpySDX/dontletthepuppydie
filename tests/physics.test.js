@@ -294,8 +294,10 @@ test("Physics tests: answered() ignores a unit with no value; default lengths pe
   assert.strictEqual(PT.answered({ kind: "qty" }, "3|m/s"), true);
   assert.strictEqual(PT.answered({ kind: "pmc" }, "0"), true);
   assert.strictEqual(PT.answered({ kind: "order" }, ""), false);
-  assert.deepStrictEqual(Object.keys(PT.DEFAULTS), ["normal", "challenge", "nightmare"]);
-  assert.throws(() => PT.build("simple", {}));
+  // every level is an assessment; Simple is the shortest and least time-pressured
+  assert.deepStrictEqual(Object.keys(PT.DEFAULTS), ["simple", "normal", "challenge", "nightmare"]);
+  assert.ok(PT.DEFAULTS.simple.minutes < PT.DEFAULTS.normal.minutes);
+  assert.throws(() => PT.build("guided", {}));
 });
 test("Physics mixed tests follow the blueprint: mostly calculation, at most a couple of reasoning questions, harder by level", () => {
   const PT = W.PhysTest, REASON = new Set(["ph_concepts", "ph_graphs", "ph_equations", "ph_error", "ph_insufficient", "ph_units"]);
@@ -313,4 +315,20 @@ test("Physics mixed tests follow the blueprint: mostly calculation, at most a co
   }
   assert.ok(stats.challenge.ppq > stats.normal.ppq, JSON.stringify(stats));
   assert.ok(stats.nightmare.unequal > stats.challenge.unequal && stats.challenge.unequal >= stats.normal.unequal, JSON.stringify(stats));
+});
+
+test("Physics Simple test: a real assessment at Simple level (no scaffolds needed to answer), fewer steps than Normal", () => {
+  const PT = W.PhysTest;
+  assert.ok(PT.TEST_LEVELS.includes("simple"));
+  const parts = { simple: 0, normal: 0 };
+  for (const level of ["simple", "normal"]) {
+    for (let k = 0; k < 6; k++) {
+      const { questions } = PT.build(level, { topic: PT.MIX, n: 6, rnd: W.Bank.rng(900 + k), preview: true });
+      assert.strictEqual(questions.length, 6, level);
+      for (const q of questions) { assert.strictEqual(q.meta.mode, level, q.id); assert.ok(q.parts.every((p) => p.marks >= 1)); }
+      parts[level] += questions.reduce((a, q) => a + q.parts.length, 0);
+    }
+  }
+  // shorter reasoning chains: fewer marked parts on average than Normal
+  assert.ok(parts.simple <= parts.normal, JSON.stringify(parts));
 });

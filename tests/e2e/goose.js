@@ -1,6 +1,9 @@
 // Browser checks for Goose Mode and the survival rebalance (kettle / oxygen deaths through the one game-over path).
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/goose.js
 const { chromium } = require("playwright");
+const { evalNav, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const results = []; const errors = [];
@@ -27,7 +30,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
     p.on("dialog", (d) => d.accept());
     await p.addInitScript((seed) => { if (!sessionStorage.getItem("i")) { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v)); sessionStorage.setItem("i", 1); } }, { "campfire-prep.onboarding.v1": DONE, ...seed });
     await p.goto(BASE + (opts.hash || "")); await p.waitForTimeout(300);
-    await p.click("#btn-enter"); await p.waitForTimeout(350);
+    await enterIf(p); await p.waitForTimeout(350);
     return p;
   };
   const prefs = (p) => p.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.prefs.v1") || "{}"));
@@ -45,17 +48,17 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   ok("Not available on Simple (switch disabled, note shown)", await p.isDisabled("#goose-toggle") && /Not available on Simple/.test(await p.textContent("#set-goose")));
   ok("The description says it replaces puppy survival", /replaces puppy survival/i.test(await p.textContent("#goose-d")));
   await closeSettings(p);
-  await p.click('#mode-track [data-mode="normal"]'); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await p.waitForTimeout(150);
   ok("Choosing a difficulty never switches Goose Mode on", !(await prefs(p)).goose && !(await p.evaluate(() => window.Goose.enabled)));
   await toggleGoose(p);
   ok("On Normal it can be switched on", (await prefs(p)).goose === true && await p.evaluate(() => window.Goose.enabled));
   ok("Mascot becomes the goose (settings button and island)", (await p.getAttribute("#btn-settings use", "href")) === "#goose-head" && (await p.getAttribute("#brand-link .pup-mark use", "href")) === "#goose-head");
   ok("Goose bar with Reset layout and Turn off is shown", await vis(p, "#gz-hud") && await vis(p, '#gz-hud [data-gz="off"]'));
-  await p.click('#mode-track [data-mode="challenge"]'); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="challenge"]'); await p.waitForTimeout(150);
   ok("Switching to Challenging keeps it on", (await prefs(p)).goose === true);
-  await p.click('#mode-track [data-mode="simple"]'); await p.waitForTimeout(200);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="simple"]'); await p.waitForTimeout(200);
   ok("Selecting Simple disables Goose Mode and restores the puppy", (await prefs(p)).goose === false && !(await p.evaluate(() => window.Goose.enabled)) && (await p.getAttribute("#btn-settings use", "href")) === "#pup" && !(await p.$("#gz-hud")));
-  await p.click('#mode-track [data-mode="nightmare"]'); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="nightmare"]'); await p.waitForTimeout(150);
   ok("…and choosing Nightmare afterwards doesn't silently re-enable it", (await prefs(p)).goose === false);
   await p.context().close();
 
@@ -75,7 +78,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   ok("With Goose Mode on the scheduler starts events by itself", (await p.evaluate(() => window.Goose.log().length)) >= 1, JSON.stringify(await p.evaluate(() => window.Goose.log().map((x) => x.id))));
   await p.evaluate(() => window.Goose.endAll());
   ok("Scheduler intervals are randomized around 30 s (20–40 s)", JSON.stringify(await p.evaluate(() => window.Goose.CFG.interval)) === "[20,40]");
-  await p.evaluate(() => document.querySelector('#main-nav [data-go="library"]').click()); await p.waitForTimeout(300);
+  await evalNav(p, "library", 300);
   ok("No events on screens without a game (Library)", !(await p.evaluate(() => window.Goose.trigger("grayscale"))) && !(await vis(p, "#gz-hud")));
   await home(p);
 
@@ -97,7 +100,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   await p.evaluate(() => window.Goose.endAll()); await p.waitForTimeout(700);
 
   // ── 4. goose theft keeps the panel's node and state; the drop stays on screen
-  await p.evaluate(() => { for (const el of document.querySelectorAll("#topic-card, #stats-panel, #dash .quick, #dash .dash-row > section, #studio-concepts")) { el.__mark = el.parentElement; } });
+  await p.evaluate(() => { for (const el of document.querySelectorAll("#topic-card, #hub-subjects, #dash .hub-tiles")) { el.__mark = el.parentElement; } });
   await p.evaluate(() => window.Goose.trigger("theft")); await p.waitForTimeout(400);
   ok("The goose appears (animated, not teleporting)", (await p.locator(".gz-goose").count()) === 1);
   await p.waitForTimeout(6600);
@@ -112,19 +115,19 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   ok("…and the goose has left", theft && theft.goose === 0);
 
   // ── 5. drag and drop (Goose only), clamped, with reset
-  await p.evaluate(() => { window.Goose.setNext(1e9); window.Goose.endAll(); }); await p.waitForTimeout(300);
-  const h = p.locator('[data-gz-key="stats"] > .gz-handle');
+  await p.evaluate(() => { window.Goose.setNext(1e9); window.Goose.endAll(); window.Goose.resetLayout(); window.scrollTo(0, 0); }); await p.waitForTimeout(300);
+  const h = p.locator('[data-gz-key="subjects"] > .gz-handle');
   ok("In Goose Mode panels get a drag handle", (await p.locator(".gz-handle").count()) >= 3 && await h.count() === 1);
   const hb = await h.boundingBox();
-  await p.mouse.move(hb.x + 10, hb.y + 10); await p.mouse.down(); await p.mouse.move(hb.x - 300, hb.y + 120, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(150);
-  const dragged = await p.evaluate(() => window.Goose.offsets().stats);
-  ok("Dragging the handle moves the panel", dragged && dragged.x < -250 && dragged.y > 60, JSON.stringify(dragged));
+  await p.mouse.move(hb.x + 10, hb.y + 10); await p.mouse.down(); await p.mouse.move(hb.x + 300, hb.y + 120, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(150);
+  const dragged = await p.evaluate(() => window.Goose.offsets().subjects);
+  ok("Dragging the handle moves the panel", dragged && dragged.x > 250 && dragged.y > 60, JSON.stringify(dragged));
   const hb2 = await h.boundingBox();
   await p.mouse.move(hb2.x + 10, hb2.y + 10); await p.mouse.down(); await p.mouse.move(hb2.x + 3000, hb2.y - 3000, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(150);
-  const clampd = await p.evaluate(() => { const r = document.querySelector('[data-gz-key="stats"]').getBoundingClientRect(), isl = document.querySelector("#island-wrap").getBoundingClientRect(); return r.right <= innerWidth + 1 && r.left >= 0 && r.top >= isl.bottom - 1; });
+  const clampd = await p.evaluate(() => { const r = document.querySelector('[data-gz-key="subjects"]').getBoundingClientRect(), isl = document.querySelector("#island-wrap").getBoundingClientRect(); return r.right <= innerWidth + 1 && r.left >= 0 && r.top >= isl.bottom - 1; });
   ok("Panels can't be dragged off-screen or behind the navigation", clampd);
   await h.focus(); await p.keyboard.press("ArrowLeft"); await p.waitForTimeout(80);
-  ok("Keyboard: arrow keys move the focused handle's panel", (await p.evaluate(() => window.Goose.offsets().stats.x)) < (await p.evaluate(() => innerWidth)));
+  ok("Keyboard: arrow keys move the focused handle's panel", (await p.evaluate(() => window.Goose.offsets().subjects.x)) < (await p.evaluate(() => innerWidth)));
   await p.click('#gz-hud [data-gz="reset"]'); await p.waitForTimeout(150);
   ok("Reset layout puts every panel back", JSON.stringify(await p.evaluate(() => window.Goose.offsets())) === "{}" && (await p.locator(".gz-moved").count()) === 0);
   await p.evaluate(() => window.Goose.trigger("theft")); await p.waitForTimeout(7000);
@@ -153,7 +156,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   await p.evaluate(() => window.Goose.trigger("freeze")); await p.waitForTimeout(300);
 
   // ── 8. reload mid-event: no stale effects or layout
-  await p.goto(BASE); await p.waitForTimeout(400); await p.click("#btn-enter"); await p.waitForTimeout(500);
+  await p.goto(BASE); await p.waitForTimeout(400); await enterIf(p); await p.waitForTimeout(500);
   const afterReload = await leftovers(p);
   ok("Reload during a freeze + rainbow leaves nothing stale", clean(afterReload) && JSON.stringify(await p.evaluate(() => window.Goose.offsets())) === "{}" && !(await p.evaluate(() => window.Goose.frozen())), JSON.stringify(afterReload));
   ok("…and Goose Mode is still on (setting saved)", await p.evaluate(() => window.Goose.enabled) && /Mode Oie/.test(await p.textContent("#gz-hud")));
@@ -163,8 +166,9 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   // ── 9. tests: Goose replaces the campfire on Normal, Challenging and Nightmare; the maths is untouched
   p = await mk({ "campfire-prep.prefs.v1": { mode: "normal", goose: true, buddyMode: "normal", hardcore: true, companion: FULL } }, { hash: "#debug" });
   for (const lv of ["normal", "challenge", "nightmare"]) {
-    await p.evaluate(() => document.querySelector('[data-go="practice"]').click()); await p.waitForTimeout(250);
-    await p.click(`#drills [data-start-mode="${lv}"]`); await p.waitForTimeout(600);
+    await p.evaluate(() => document.querySelector('#main-nav [data-go="home"]').click()); await p.waitForTimeout(250); // full tests start from Home's difficulty cards
+    await toTakeIf(p); await p.click(`#mode-track [data-mode="${lv}"]`); await p.waitForTimeout(150);
+    await toTakeIf(p); await p.click(`#mode-preview #btn-start`); await p.waitForTimeout(600);
     const s = await sess(p);
     ok(`${lv}: test runs under Goose rules (no campfire, kettle, oxygen or game over)`, s && s.goose && s.mode === "off" && !s.companion && !s.hardcore && await p.evaluate(() => document.body.classList.contains("buddy-off") && !window.__fire.comp && !window.__fire._raf) && s.preGoose && s.preGoose.mode === "normal");
     ok(`${lv}: goose events work in the test`, await p.evaluate(() => window.Goose.trigger("grayscale")));
@@ -176,7 +180,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   const hasInput = (await inp.count()) > 0;
   const clockS = () => p.evaluate(() => { const [m, s] = document.querySelector("#timer-value").textContent.split(":").map(Number); return m * 60 + s; });
   const c0 = await clockS(), w0 = Date.now();
-  await p.evaluate(() => window.Goose.trigger("freeze")); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.Goose.setNext(1e9); window.Goose.endAll(); window.Goose.trigger("freeze"); }); await p.waitForTimeout(200); // no random event may start mid-check
   const blocked = await p.evaluate(() => document.querySelector("#screen-test").inert && document.querySelector(".gz-freeze") !== null);
   if (hasInput) await inp.click({ timeout: 800, force: true }).catch(() => {});
   ok("Freeze blocks the game area with a visible goose notice", blocked);
@@ -184,7 +188,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
   ok("…the Exit and Pause buttons stay usable", !(await p.evaluate(() => document.querySelector("#topbar-test").inert)) && await p.isEnabled("#btn-pause"));
   for (let i = 0; i < 30 && await p.evaluate(() => window.Goose.frozen()); i++) await p.waitForTimeout(200);
   const c1 = await clockS(), wall = (Date.now() - w0) / 1000;
-  ok("Freeze ends by itself and input comes back", !(await p.evaluate(() => window.Goose.frozen())) && !(await p.evaluate(() => document.querySelector("#screen-test").inert)) && clean(await leftovers(p)));
+  ok("Freeze ends by itself and input comes back", !(await p.evaluate(() => window.Goose.frozen())) && !(await p.evaluate(() => document.querySelector("#screen-test").inert)) && clean(await leftovers(p)), JSON.stringify(await leftovers(p)) + " frozen=" + (await p.evaluate(() => window.Goose.frozen())));
   if (hasInput) { await p.waitForTimeout(500); await inp.fill("(1, 2)"); ok("…answers can be typed again", (await inp.inputValue()) === "(1, 2)"); }
   ok("The test clock is held during the freeze", wall >= 2 && c0 - c1 <= 1.5, `clock moved ${c0 - c1} s over ${wall.toFixed(1)} s`);
   // turning Goose off mid-test brings the selected puppy rules back; on again puts them away
@@ -199,7 +203,7 @@ const clean = (l) => !l.classes.length && !l.overlays && !l.inert;
 
   // ── 10. kettle and oxygen deaths in the real game (puppy rules, Hardcore → game over dialog)
   p = await mk({ "campfire-prep.prefs.v1": { mode: "normal", buddyMode: "normal", hardcore: true, companion: FULL } }, { hash: "#debug" });
-  await p.click("#btn-start"); await p.waitForTimeout(700);
+  await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(700);
   await p.evaluate(() => { const f = window.__fire; f.heat = 60; f.comp.s.pressure = 100; });
   await p.waitForTimeout(3000);
   ok("Kettle at full pressure counts down first (not instant)", (await p.evaluate(() => window.__fire.status)) === "ok" && /Blows in/.test(await p.textContent('#companion [data-m="pressure"]')));

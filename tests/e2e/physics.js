@@ -1,7 +1,9 @@
 // Browser checks for Physics 11: the subject switcher, separate data, the practice runner answered with real keys,
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // leaving an active run, every layout, the lab tools and their cleanup, Goose Mode, five languages and phone width.
 // Run against tests/e2e/devserver.js:  node tests/e2e/devserver.js &  then  node tests/e2e/physics.js
 const { chromium } = require("playwright");
+const { evalNav, toTake, pickSubject } = require("./navhelp");
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const BASE = process.env.BASE || "http://localhost:8766/";
 const results = []; const errors = [];
@@ -19,13 +21,16 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
     p.on("console", (m) => { if (m.type() === "error" && !/ERR_TUNNEL|favicon|503|fonts/.test(m.text())) errors.push(m.text()); });
     if (!ctxIn) await p.addInitScript((seed) => { if (!sessionStorage.getItem("i")) { localStorage.clear(); for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v)); sessionStorage.setItem("i", 1); } }, { "campfire-prep.onboarding.v1": DONE, "campfire-prep.prefs.v1": { mode: "normal" }, ...seed });
     await p.goto(BASE); await p.waitForTimeout(250);
-    await p.click("#btn-enter"); await p.waitForTimeout(300);
+    await enterIf(p); await p.waitForTimeout(300);
     return p;
   };
-  const toPhysics = async (p) => { await p.click("#subject-btn"); await p.waitForTimeout(80); await p.click('#subject-menu [data-subject="physics"]'); await p.waitForTimeout(350); };
-  const toMath = async (p) => { await p.click("#subject-btn"); await p.waitForTimeout(80); await p.click('#subject-menu [data-subject="math"]'); await p.waitForTimeout(350); };
-  const nav = async (p, go) => { await p.evaluate((go) => document.querySelector(`#main-nav [data-go="${go}"]`).click(), go); await p.waitForTimeout(220); };
+  const toPhysics = async (p) => { await pickSubject(p, "physics", 0); await p.waitForTimeout(350); };
+  const toMath = async (p) => { await pickSubject(p, "math", 0); await p.waitForTimeout(350); };
+  const nav = (p, go) => evalNav(p, go, 220);
   const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const tab = async (p, go) => { await p.click(`.screen:not([hidden]) [data-tabs] [data-go="${go}"]`); await p.waitForTimeout(220); };
+  // the labs are optional: Learn → Labs (optional), never on the way to a test
+  const lab = async (p) => { await nav(p, "library"); await p.click('#phys-root [data-ph-ltab="labs"]'); await p.waitForTimeout(250); };
   const physView = (p) => p.evaluate(() => document.getElementById("phys-root").dataset.view);
   const store = (p, k) => p.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), k);
   // answer the question on screen with its key, part by part, through the real inputs
@@ -59,23 +64,29 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
 
   // ── 1. switcher, labels, persistence, remembered subject
   let p = await mk({ [MK]: [{ date: Date.now(), quiz: "seed", source: "drill", level: "normal", qid: "x", kind: "nr", concepts: [], sub: "F.vertex_to_std", family: "f", mode: "normal", correct: true }] });
-  ok("Subject switcher is in the island, Math selected by default", await vis(p, "#subject-btn") && (await p.getAttribute("#subject-btn", "data-subject")) === "math");
+  ok("Home: the two subject cards choose the subject (Math current by default)", await vis(p, '#hub-subjects .s-math.current') && !(await vis(p, "#subject-btn")));
+  await toTake(p);
+  ok("Elsewhere the subject switcher is in the top bar, Math selected by default", await vis(p, "#subject-btn") && (await p.getAttribute("#subject-btn", "data-subject")) === "math");
   await p.click("#subject-btn"); await p.waitForTimeout(80);
   ok("Menu offers Math and Physics as radio items", (await p.$$eval("#subject-menu [role=menuitemradio]", (xs) => xs.map((x) => x.dataset.subject).join(","))) === "math,physics");
   await p.keyboard.press("Escape"); await p.waitForTimeout(80);
   ok("Escape closes the subject menu", !(await vis(p, "#subject-menu")));
   await toPhysics(p);
-  ok("Physics home opens (the shared home screen)", (await p.evaluate(() => document.body.dataset.subject)) === "physics" && (await p.evaluate(() => document.body.dataset.screen)) === "home" && await vis(p, "#mode-track"));
-  const labs = await p.evaluate(() => ["library", "studyroom"].map((g) => document.querySelector(`#main-nav [data-go="${g}"] span[data-i18n]`).textContent));
-  ok("Island labels change to Lessons and Lab for Physics", /Lessons|Learn/.test(labs[0]) && /Lab/.test(labs[1]), labs.join(","));
+  ok("Switching on Take a Test stays there, now Physics", (await p.evaluate(() => document.body.dataset.screen)) === "take" && (await p.evaluate(() => document.body.dataset.subject)) === "physics");
+  await nav(p, "home");
+  ok("Physics home opens (the shared home screen)", (await p.evaluate(() => document.body.dataset.subject)) === "physics" && (await p.evaluate(() => document.body.dataset.screen)) === "home" && await vis(p, "#hub-subjects"));
+  const isl = await p.evaluate(() => [...document.querySelectorAll("#main-nav [data-go]")].map((b) => b.dataset.go + ":" + b.querySelector("span[data-i18n]").textContent.trim()).join(","));
+  ok("Physics uses the same top-bar destinations as Math", isl === "home:Home,take:Tests,game:Game,bar:The Bar,progress:Diagnostics", isl);
   ok("Physics dashboard is empty-honest (no Math records shown, no invented progress)", !(await p.evaluate(() => /Vertex|vertex/.test(document.getElementById("phys-root").textContent))));
-  await p.reload(); await p.waitForTimeout(250); await p.click("#btn-enter"); await p.waitForTimeout(300);
+  await p.reload(); await p.waitForTimeout(250); await enterIf(p); await p.waitForTimeout(300);
   ok("Last subject is remembered after reload", (await p.evaluate(() => document.body.dataset.subject)) === "physics" && (await p.evaluate(() => document.body.dataset.screen)) === "home");
-  for (const [go, view] of [["library", "learn"], ["practice", "practice"], ["studyroom", "lab"]]) {
+  for (const [go, screen, sel] of [["library", "phys", "#phys-root [data-ph-ltab]"], ["practice", "practice", "#drills .phys-host [data-ph-fams]"], ["progress", "progress", "#progress-phys .ph-diag, #progress-phys [data-ph-start=diag]"]]) {
     await nav(p, go);
-    ok(`Island "${go}" opens the physics ${view} view`, (await physView(p)) === view && (await p.getAttribute(`#main-nav [data-go="${go}"]`, "aria-current")) === "page");
+    ok(`"${go}" opens the shared ${screen} screen with Physics content`, (await p.evaluate(() => document.body.dataset.screen)) === screen && await vis(p, sel) && (await p.getAttribute(`#main-nav [data-go="${{ library: "bar", practice: "bar" }[go] || go}"]`, "aria-current")) === "page");
   }
-  await p.evaluate(() => window.__app && 0); // (Progress has no island button; the in-app route is covered by navigate("progress") → diagnostics)
+  await nav(p, "practice");
+  const ptabs = await p.$$eval(".screen:not([hidden]) [data-tabs] [data-go]", (xs) => xs.map((x) => x.dataset.go).join());
+  ok("Physics Bar tabs: The Bar, Skills and Whole course (no Study Room)", ptabs === "bar,practice,course", ptabs);
 
   // ── 2. a practice run answered through the real inputs, records kept separately
   await nav(p, "home");
@@ -104,12 +115,11 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
   ok("Every record carries skills, level and an error category only when wrong", recs.every((r) => r.skills && r.skills.length && r.mode === "normal" && (r.correct ? !r.cat : true)));
   ok("Math practice records untouched", (await store(p, MK)).length === 1);
   await p.click(".ph-results [data-ph-leave]"); await p.waitForTimeout(200);
-  await nav(p, "practice");
-  await p.click('[data-ph-tab="diagnostics"]'); await p.waitForTimeout(150);
-  ok("Diagnostics show evidence from the run (not empty, not invented)", (await p.locator("#phys-root .ph-skills li, #phys-root .ph-diag li").count()) >= 1);
-  await p.click('[data-ph-tab="review"]'); await p.waitForTimeout(150);
-  ok("Review tab renders", await vis(p, "section.ph-review"));
-  await p.click('[data-ph-tab="course"]'); await p.waitForTimeout(150);
+  await nav(p, "progress");
+  ok("Diagnostics show evidence from the run (not empty, not invented)", (await p.locator("#progress-phys .ph-skills li, #progress-phys .ph-diag li").count()) >= 1);
+  await tab(p, "review");
+  ok("Mistakes & review tab renders the Physics review", await vis(p, "#review-phys .sp-queue, #review-phys .empty-note") && !(await vis(p, "#rv-body")));
+  await nav(p, "practice"); await tab(p, "course");
   const legend = await p.textContent(".ph-legend");
   ok("Course map labels statuses honestly (tested / validation / planned / supplementary)", /Implemented and tested/i.test(legend) && /Planned/i.test(legend) && /Supplementary/i.test(legend), legend.replace(/\s+/g, " ").slice(0, 160));
 
@@ -123,7 +133,9 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
   ok("Staying keeps the same run and question", (await physView(p)) === "run" && JSON.stringify(await p.evaluate(() => window.PhysUI.current())) === JSON.stringify(before));
   await toMath(p); await p.click("#dialog-ok"); await p.waitForTimeout(300);
   ok("Confirming switches to Math home", (await p.evaluate(() => document.body.dataset.subject)) === "math" && (await p.evaluate(() => document.body.dataset.screen)) === "home" && !(await p.evaluate(() => window.PhysUI.runActive)));
-  ok("Island labels return to Math", await p.evaluate(() => document.querySelector('#main-nav [data-go="studyroom"] span[data-i18n]').dataset.i18n === "nav.room"));
+  await nav(p, "practice");
+  ok("Math Bar regains its Study Room tab", (await p.$$eval(".screen:not([hidden]) [data-tabs] [data-go]", (xs) => xs.map((x) => x.dataset.go).join())) === "bar,practice,course,studyroom");
+  await nav(p, "home");
   await toPhysics(p);
   ok("Switching back with no run active is immediate", (await p.evaluate(() => document.body.dataset.screen)) === "home" && !(await p.evaluate(() => document.getElementById("dialog").open)));
   await p.context().close();
@@ -139,7 +151,7 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
   for (const layout of ["balanced", "focus", "studio", "studioplus"]) {
     p = await mk({ "campfire-prep.ui.v1": { layout }, [SK]: "physics" });
     const st = await p.evaluate(() => ({ s: document.body.dataset.subject, scr: document.body.dataset.screen }));
-    ok(`${layout}: physics home renders`, st.s === "physics" && st.scr === "home" && (layout === "studioplus" ? await vis(p, "#splus .sp-launch") : await vis(p, "#mode-track")), JSON.stringify(st));
+    ok(`${layout}: physics home renders`, st.s === "physics" && st.scr === "home" && (layout === "studioplus" ? await vis(p, "#splus .sp-launch") : await vis(p, "#hub-subjects")), JSON.stringify(st));
     ok(`${layout}: no horizontal overflow`, (await overflow(p)) <= 0);
     if (layout === "studioplus") {
       ok("Studio+: the shared workspace with Physics panels (no embedded lab)", await vis(p, "#splus .sp-diag") && !(await vis(p, "[data-tool-host]")));
@@ -147,7 +159,7 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
     await p.context().close();
   }
   p = await mk({ [SK]: "physics" });
-  await nav(p, "studyroom");
+  await lab(p);
   ok("Lab opens with the Projectile Explorer", await vis(p, '[data-tool-host="explorer"] svg'));
   const ex = await p.evaluate(() => {
     const r = {}; const host = document.querySelector('[data-tool-host="explorer"]');
@@ -163,7 +175,7 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
   }
   await nav(p, "home");
   ok("Leaving the lab hides and unmounts the tool", !(await vis(p, "[data-tool-host]")) && (await p.evaluate(() => document.body.dataset.screen)) === "home");
-  await nav(p, "library");
+  await nav(p, "library"); await p.click('#phys-root [data-ph-ltab="lessons"]'); await p.waitForTimeout(250);
   ok("Lessons render with equations (KaTeX)", (await p.locator("#phys-root .katex").count()) > 0);
   const ltabs = await p.$$eval("#phys-root [data-ph-ltab]", (xs) => xs.map((x) => x.dataset.phLtab));
   if (ltabs.includes("formulas")) { await p.click('[data-ph-ltab="formulas"]'); await p.waitForTimeout(200); }
@@ -194,7 +206,7 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
     await p.evaluate(() => window.PhysUI.startRun({ subs: ["PC.angled_same"], n: 5 })); await p.waitForTimeout(300); // the practice runner (Simple, reviews)
     const r2 = await raw();
     const stem = await p.evaluate(() => document.querySelector(".ph-q .q-text").textContent);
-    await nav(p, "studyroom");
+    await lab(p);
     const r3 = await raw();
     ok(`${lang}: physics home, runner and lab show no raw translation keys`, !r1.length && !r2.length && !r3.length, JSON.stringify([r1, r2, r3]));
     ok(`${lang}: question text is translated`, lang === "zh" ? /[一-鿿]/.test(stem) : !/^A |^An |^The /.test(stem), stem.slice(0, 80));
@@ -205,7 +217,7 @@ const PK = "campfire-prep.phys.practice.v1", MK = "campfire-prep.practice.v1", S
   ok("Phone: physics home fits", (await overflow(p)) <= 0);
   await p.evaluate(() => window.PhysUI.startRun({ subs: ["PC.angled_same"], n: 5 })); await p.waitForTimeout(300); // the practice runner (Simple, reviews)
   ok("Phone: runner fits", (await overflow(p)) <= 0 && await vis(p, ".ph-q"));
-  await nav(p, "studyroom");
+  await lab(p);
   ok("Phone: lab fits", (await overflow(p)) <= 0 && await vis(p, '[data-tool-host="explorer"] svg'));
   await p.context().close();
 

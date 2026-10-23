@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 const OUT = process.env.E2E_OUT || require("os").tmpdir(); process.chdir(OUT);
 const results = []; const errors = [];
 const ok = (n, c, x = "") => { results.push({ n, pass: !!c }); console.log((c ? "PASS " : "FAIL ") + n + (x ? "  — " + x : "")); };
@@ -6,15 +7,13 @@ const vis = (p, s) => p.locator(s).first().isVisible().catch(() => false);
 // Create test: switch the campfire minigame on (if needed) and open "Customize"
 const campOn = async (p) => { if (!(await p.isChecked("#s-camp"))) await p.check("#s-camp", { force: true }); await p.evaluate(() => { document.querySelector("#s-camp-custom").open = true; }); await p.waitForTimeout(100); };
 // island navigation: Home · Practice · Concepts · Study Room
-const navTo = async (p, where) => {
-  if ((await p.getAttribute("#brand-link", "aria-expanded")) !== "true") { await p.click("#brand-link"); await p.waitForTimeout(120); }
-  await p.click(`#main-nav [data-go="${where}"]`); await p.waitForTimeout(300);
-};
+const { go: navTo, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 // "Options…" for a test mode lives in that mode's preview on Home; previewing starts nothing
 const create = async (p, level = "normal") => {
   if (!(await vis(p, "#screen-home"))) await navTo(p, "home");
-  await p.click(`#mode-track [data-mode="${level}"]`); await p.waitForTimeout(150);
-  await p.click("#btn-create"); await p.waitForTimeout(300);
+  await toTakeIf(p); await p.click(`#mode-track [data-mode="${level}"]`); await p.waitForTimeout(150);
+  await toTakeIf(p); await p.click("#btn-create"); await p.waitForTimeout(300);
 };
 (async () => {
   const b = await chromium.launch();
@@ -24,7 +23,7 @@ const create = async (p, level = "normal") => {
     p.on("pageerror", (e) => errors.push(e.message));
     p.on("console", (m) => { if (m.type() === "error" && !/ERR_TUNNEL|favicon|503/.test(m.text())) errors.push(m.text()); });
     await p.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
-    await p.goto(base); await p.click("#btn-enter"); await p.waitForTimeout(300); return p;
+    await p.goto(base); await enterIf(p); await p.waitForTimeout(300); return p;
   };
   // not configured
   let p = await mk(process.env.BASE_OFF || "http://localhost:8767/");
@@ -111,7 +110,7 @@ const create = async (p, level = "normal") => {
       if (await pg.locator("#room-main [data-mc]").count()) await pg.locator(right ? '#room-main [data-mc="0"]' : '#room-main [data-mc]:not([data-mc="0"])').first().click();
       else { const a = await pg.evaluate(() => String(window.Practice.active.items[window.Practice.active.i].q.answer)); await pg.fill("#pr-nr", right ? a : "12345"); }
       await pg.click('#room-main [data-pr="check"]'); await pg.waitForTimeout(80);
-      if (!right && i === 1) { await pg.reload(); await pg.waitForTimeout(700); if (await vis(pg, "#btn-enter")) { await pg.click("#btn-enter"); } await pg.waitForTimeout(300);
+      if (!right && i === 1) { await pg.reload(); await pg.waitForTimeout(700); await enterIf(pg); await pg.waitForTimeout(300);
         ok("Room: refresh keeps your answers and place", (await pg.evaluate(() => window.Practice.active && window.Practice.active.i)) === 2 || (await pg.textContent("#room-main")).includes("Question 3")); continue; }
       await pg.click('#room-main [data-pr="next"]'); await pg.waitForTimeout(80);
     }
@@ -134,7 +133,7 @@ const create = async (p, level = "normal") => {
   s3.on("pageerror", (e) => errors.push(e.message));
   await s3.clock.install({ time: new Date("2026-10-20T15:00:10") });
   await s3.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
-  await s3.goto(BASE); await s3.click("#btn-enter"); await s3.waitForTimeout(200);
+  await s3.goto(BASE); await enterIf(s3); await s3.waitForTimeout(200);
   await navTo(s3, "studyroom"); await s3.click("#btn-room-create"); await s3.check('[data-rc="exponents.laws"]'); await s3.check('[data-rc="exponents.negative"]');
   await s3.click('#rc-pace-mode [data-mode="synced"]'); await s3.click('#rc-pace [data-pace="60"]'); await s3.click('#rc-start [data-start="1"]'); await s3.click('#rc-count [data-count="5"]');
   await s3.uncheck("#rc-hints", { force: true }); await s3.click("#rc-go"); await s3.waitForTimeout(300);
@@ -156,7 +155,7 @@ const create = async (p, level = "normal") => {
   const c1 = await cc.newPage();
   c1.on("pageerror", (e) => errors.push(e.message));
   await c1.addInitScript(() => { if (!sessionStorage.getItem("i")) { localStorage.clear(); localStorage.setItem("campfire-prep.toured.v1", "true"); localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed", test: "completed", game: "completed" })); sessionStorage.setItem("i", 1); } });
-  await c1.goto(BASE + "#debug"); await c1.click("#btn-enter"); await c1.waitForTimeout(200);
+  await c1.goto(BASE + "#debug"); await enterIf(c1); await c1.waitForTimeout(200);
   await create(c1);
   ok("Master switch: the campfire minigame is off by default", !(await c1.isChecked("#s-camp")) && !(await vis(c1, "#s-camp-body")));
   await c1.check("#s-camp", { force: true }); await c1.waitForTimeout(150);
@@ -214,7 +213,7 @@ const create = async (p, level = "normal") => {
   ok("Pause freezes the companion simulation", Math.abs(ct1 - ct0) < 0.6, `${ct0.toFixed(1)} → ${ct1.toFixed(1)}`);
   await c1.click("#btn-unpause"); await c1.waitForTimeout(300);
   await c1.evaluate(() => { window.__fire.comp.s.hp = 4; }); await c1.click("#btn-pause"); await c1.waitForTimeout(200);
-  await c1.reload(); await c1.waitForTimeout(600); if (await vis(c1, "#btn-enter")) await c1.click("#btn-enter");
+  await c1.reload(); await c1.waitForTimeout(600); await enterIf(c1);
   await c1.click("#tutor-launcher").catch(() => {}); if (await vis(c1, "#tutor-locked-resume")) await c1.click("#tutor-locked-resume"); else await c1.click("#btn-resume").catch(() => {});
   await c1.waitForTimeout(400); if (await vis(c1, "#btn-unpause")) await c1.click("#btn-unpause"); await c1.waitForTimeout(400);
   ok("Reload/resume keeps the companion state (hearts, vent direction)", await c1.evaluate(() => { const s = window.__fire && window.__fire.comp && window.__fire.comp.s; return s && Math.round(s.hp) >= 4 && s.ventDir === "E"; }));
@@ -231,7 +230,7 @@ const create = async (p, level = "normal") => {
   const n1 = await mk((process.env.BASE || "http://localhost:8766/"));
   await create(n1, "nightmare");
   ok("Nightmare: Options opens with Nightmare selected and no tier picker", (await n1.locator('#s-level [data-level="nightmare"][aria-checked="true"], #s-level [data-level="nightmare"].active').count()) === 1 && (await n1.locator("[data-tier]").count()) === 0);
-  ok("Setup offers exactly Normal, Challenging, Nightmare (no Tim's Test)", (await n1.$$eval("#s-level [data-level]", (els) => els.map((e) => e.dataset.level).join(","))) === "normal,challenge,nightmare");
+  ok("Setup offers exactly Simple, Normal, Challenging, Nightmare (no Tim's Test)", (await n1.$$eval("#s-level [data-level]", (els) => els.map((e) => e.dataset.level).join(","))) === "simple,normal,challenge,nightmare");
   ok("Nightmare: campfire companion not switched on by Nightmare", !(await n1.isChecked("#s-camp")));
   await n1.click("#s-go"); await n1.waitForTimeout(700);
   ok("Nightmare: test starts with the Nightmare chip and 5 stages", await vis(n1, "#screen-test") && /Nightmare/.test(await n1.textContent("#tb-level")) && (await n1.locator("#nav-grid .nav-cell").count()) === 5);
@@ -243,7 +242,7 @@ const create = async (p, level = "normal") => {
   await n1.locator("#q-body input.answer-input").first().fill("(3, -2)"); await n1.waitForTimeout(150);
   const stText = await n1.textContent("#q-body");
   await n1.click("#btn-pause"); await n1.waitForTimeout(200);
-  await n1.reload(); await n1.waitForTimeout(700); if (await vis(n1, "#btn-enter")) await n1.click("#btn-enter");
+  await n1.reload(); await n1.waitForTimeout(700); await enterIf(n1);
   await n1.click("#btn-resume").catch(() => {}); await n1.waitForTimeout(400);
   if (!(await vis(n1, "#screen-test"))) { const rb = n1.locator("#resume-box button").first(); if (await rb.count()) { await rb.click(); await n1.waitForTimeout(500); } }
   if (await vis(n1, "#btn-unpause")) await n1.click("#btn-unpause");
@@ -260,8 +259,8 @@ const create = async (p, level = "normal") => {
     h.push(legacy("nightmare2", "legacy-nm2"), legacy("classmate", "legacy-tim"));
     localStorage.setItem(k, JSON.stringify(h)); return h.length;
   });
-  await n1.reload(); await n1.waitForTimeout(600); if (await vis(n1, "#btn-enter")) await n1.click("#btn-enter");
-  await navTo(n1, "practice"); await n1.click('.screen:not([hidden]) [data-tabs] [data-go="progress"]'); await n1.waitForTimeout(400);
+  await n1.reload(); await n1.waitForTimeout(600); await enterIf(n1);
+  await navTo(n1, "progress", 400);
   const histTxt = await n1.textContent("#history-list");
   ok("Legacy radicals attempts still listed in history (Nightmare II, Tim's Test)", /Nightmare II/.test(histTxt) && /Tim/.test(histTxt) && (await n1.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.history.v2")).length)) === nHist);
   // Standard still works

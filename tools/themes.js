@@ -19,6 +19,14 @@ const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y
 // tone: which base the theme builds on (light or dark surfaces). accentInk/emberInk: text on filled buttons.
 // second: the secondary hue (charts, vector components, highlights). tints: three soft background glows.
 const THEMES = {
+  // the default: boutique café meets dark academia — espresso and walnut, parchment text, brass accent, sage
+  cafe: {
+    name: "Study Café", tone: "dark",
+    bg: "#16100b", surface: "#241a13", ink: "#f3e9d6", muted: "#cdbb9f",
+    accent: "#d4ac5e", accentInk: "#1d1309", second: "#a3bb95", ember: "#d4ac5e", emberInk: "#1d1309",
+    good: "#9fd08f", mid: "#e6c47c", bad: "#f2957f",
+    tints: ["#b8913f", "#6f8a63", "#6b2f22"],
+  },
   cinnamon: {
     name: "Cinnamon", tone: "light",
     bg: "#f5ebe1", surface: "#fffaf4", ink: "#2d1b10", muted: "#6a4e3c",
@@ -149,9 +157,11 @@ function css() {
 }
 const W_ = "#ffffff";
 
-const IDS = ["light", "dark", "system", ...Object.keys(THEMES)];
+// the Study Café is the default and comes first in the picker
+const IDS = ["cafe", "light", "dark", "system", ...Object.keys(THEMES).filter((k) => k !== "cafe")];
+const DEFAULT = "cafe";
 const TONE = { light: "light", dark: "dark", ...Object.fromEntries(Object.entries(THEMES).map(([k, p]) => [k, p.tone])) };
-module.exports = { THEMES, derive, contrast, mix, IDS, TONE, css };
+module.exports = { THEMES, derive, contrast, mix, IDS, TONE, DEFAULT, css };
 
 if (require.main === module) {
   const file = path.join(__dirname, "..", "css", "themes.css");

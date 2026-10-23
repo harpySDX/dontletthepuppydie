@@ -1,4 +1,5 @@
 // Browser checks for the redesign: island, settings (language / layout / theme), difficulty carousel,
+const enterIf = async (p) => { if (await p.locator("#btn-enter").isVisible().catch(() => false)) await p.click("#btn-enter"); }; // the app now opens on Home; kept for old saved states
 // guided Simple practice, hints by mode, graph plotter, calculator, scratchpad, Study Room, migration of saved data.
 // Run against tests/e2e/devserver.js (AI mocked):  node tests/e2e/devserver.js &  then  node tests/e2e/redesign.js
 const { chromium } = require("playwright");
@@ -7,10 +8,8 @@ const BASE = process.env.BASE || "http://localhost:8766/";
 const results = []; const errors = [];
 const ok = (n, c, x = "") => { results.push({ n, pass: !!c }); console.log((c ? "PASS " : "FAIL ") + n + (x ? "  — " + x : "")); };
 const vis = (p, s) => p.locator(s).first().isVisible().catch(() => false);
-const navTo = async (p, where) => {
-  if ((await p.getAttribute("#brand-link", "aria-expanded")) !== "true") { await p.click("#brand-link"); await p.waitForTimeout(120); }
-  await p.click(`#main-nav [data-go="${where}"]`); await p.waitForTimeout(300);
-};
+const { go: navTo, toTake } = require("./navhelp");
+const toTakeIf = async (pg) => { if (!(await pg.locator("#mode-track").isVisible().catch(() => false)) && (await pg.evaluate(() => document.body.dataset.screen)) !== "test") await toTake(pg); };
 const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen")].filter((s) => !s.hidden).map((s) => s.id).join(","));
 
 (async () => {
@@ -27,7 +26,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
         sessionStorage.setItem("i", 1);
       }
     }, opts.seed || null);
-    await p.goto(BASE); if (await vis(p, "#btn-enter")) { await p.click("#btn-enter"); await p.waitForTimeout(300); }
+    await p.goto(BASE); await enterIf(p); await p.waitForTimeout(300);
     return p;
   };
 
@@ -35,14 +34,14 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   let p = await mk();
   await p.click("#btn-settings"); await p.waitForTimeout(150);
   ok("Settings popover opens from the puppy button", await vis(p, "#settings-pop") && (await p.getAttribute("#btn-settings", "aria-expanded")) === "true");
-  ok("Settings: 5 languages, 4 layouts, 12 themes", (await p.locator("#set-lang [data-lang]").count()) === 5 && (await p.locator("#set-layout [data-layout]").count()) === 4 && (await p.locator("#set-theme [data-theme-opt]").count()) === 12);
+  ok("Settings: 5 languages, 4 layouts, 13 themes, accent colours, café scene", (await p.locator("#set-lang [data-lang]").count()) === 5 && (await p.locator("#set-layout [data-layout]").count()) === 4 && (await p.locator("#set-theme [data-theme-opt]").count()) === 13 && (await p.locator("#set-accent [data-accent]").count()) === 9 && (await p.locator("#set-scene [data-scene-opt]").count()) === 3);
   await p.click('#set-lang [data-lang="fr"]'); await p.waitForTimeout(200);
   ok("Language switches the interface immediately (French)", (await p.getAttribute("html", "lang")) === "fr" && /Accueil/.test(await p.textContent("#main-nav")));
   await p.click('#set-layout [data-layout="studio"]'); await p.click('#set-theme [data-theme-opt="dark"]'); await p.waitForTimeout(150);
   ok("Layout and theme apply to the page", (await p.getAttribute("html", "data-layout")) === "studio" && (await p.getAttribute("html", "data-theme")) === "dark");
   await p.mouse.click(700, 600); await p.waitForTimeout(150);
   ok("Outside click closes the popover", !(await vis(p, "#settings-pop")));
-  await p.reload(); await p.waitForTimeout(500); if (await vis(p, "#btn-enter")) await p.click("#btn-enter");
+  await p.reload(); await p.waitForTimeout(500); await enterIf(p);
   ok("Settings persist after reload", (await p.getAttribute("html", "lang")) === "fr" && (await p.getAttribute("html", "data-layout")) === "studio" && (await p.getAttribute("html", "data-theme")) === "dark");
   const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   ok("Dark glass actually darkens the page", (() => { const m = bg.match(/\d+/g).map(Number); return m[0] + m[1] + m[2] < 200; })(), bg);
@@ -58,7 +57,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   // ── focus layout: navigator becomes a popover in tests
   p = await mk({ seed: { "campfire-prep.ui.v1": { lang: "en", layout: "focus", theme: "light" } } });
   await p.evaluate(() => { const k = "campfire-prep.prefs.v1"; const v = JSON.parse(localStorage.getItem(k) || "{}"); v.allowHints = true; localStorage.setItem(k, JSON.stringify(v)); }); // hints are opt-in (Test options); this part checks how many a Normal test allows once they're on
-  await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-start"); await p.waitForTimeout(700);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(700);
   ok("Focus layout: question navigator hidden until asked for", !(await vis(p, "#navigator")) && await vis(p, "#btn-navpop"));
   await p.click("#btn-navpop"); await p.waitForTimeout(150);
   ok("Focus layout: navigator opens as a popover", await vis(p, "#navigator"));
@@ -75,8 +74,8 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   // ── the graph plotter: click to place vertex and a second point; keyboard nudges; saved in the session
   let plotAt = -1;
   // the graphing slot is "sketch it" or "equation from the graph": restart until a test has a plot to draw
-  for (let t = 0; t < 8 && plotAt < 0; t++) {
-  if (t) { await p.click("#btn-quit"); await p.waitForTimeout(150); if (await vis(p, "#dialog")) await p.click("#dialog-ok"); await p.waitForTimeout(250); await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-start"); await p.waitForTimeout(500); if (await vis(p, "#dialog")) { await p.click("#dialog-ok"); await p.waitForTimeout(500); } }
+  for (let t = 0; t < 20 && plotAt < 0; t++) { // about one Normal test in four has a sketch-it slot (transformations may take it)
+  if (t) { await p.click("#btn-quit"); await p.waitForTimeout(150); if (await vis(p, "#dialog")) await p.click("#dialog-ok"); await p.waitForTimeout(250); await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(500); if (await vis(p, "#dialog")) { await p.click("#dialog-ok"); await p.waitForTimeout(500); } }
   for (let i = 0; i < 20 && plotAt < 0; i++) { await p.evaluate((i) => document.querySelectorAll("#nav-grid .nav-cell")[i].click(), i); await p.waitForTimeout(60); if (await p.locator("#q-body .plot-host svg").count()) plotAt = i; }
   }
   if (plotAt >= 0) {
@@ -94,20 +93,25 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   // ── Challenging: one hint per question; Nightmare: none
   p = await mk();
   await p.evaluate(() => { const k = "campfire-prep.prefs.v1"; const v = JSON.parse(localStorage.getItem(k) || "{}"); v.allowHints = true; localStorage.setItem(k, JSON.stringify(v)); }); 
-  await p.click('#mode-track [data-mode="challenge"]'); await p.click("#btn-start"); await p.waitForTimeout(700);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="challenge"]'); await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(700);
   let chi = -1;
   for (let i = 0; i < 20 && chi < 0; i++) { await p.evaluate((i) => document.querySelectorAll("#nav-grid .nav-cell")[i].click(), i); await p.waitForTimeout(60); if (await vis(p, "#btn-hint") && !(await p.isDisabled("#btn-hint"))) chi = i; }
   await p.click("#btn-hint"); await p.waitForTimeout(100);
   ok("Challenging: exactly one hint, then the button is spent", chi >= 0 && await p.isDisabled("#btn-hint") && (await p.locator("#hint-box li").count()) === 1);
   await p.click("#btn-quit"); await p.waitForTimeout(200); if (await vis(p, "#dialog")) await p.click("#dialog-ok"); await p.waitForTimeout(300);
 
-  // ── Simple: guided practice — no timer, step-by-step hints, feedback after each answer
-  await p.click('#mode-track [data-mode="simple"]'); await p.waitForTimeout(150);
-  ok("Simple preview names guided practice; nothing started yet", /guided/i.test(await p.textContent("#mode-preview")) && (await screenOf(p)) === "screen-home");
-  await p.click("#btn-start"); await p.waitForTimeout(500);
-  ok("Simple: guided practice opens in Practice, untimed", (await screenOf(p)) === "screen-practice" && await vis(p, "#prac-run") && !(await vis(p, "#timer")));
+  // ── Simple: an easier assessment (timed, marked at the end); guided step-by-step practice lives in The Bar
+  await toTakeIf(p); await p.click('#mode-track [data-mode="simple"]'); await p.waitForTimeout(150);
+  ok("Simple preview describes an easier test; nothing started yet", /easier test/i.test(await p.textContent("#mode-preview")) && (await screenOf(p)) === "screen-take");
+  await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(600);
+  if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(500); }
+  ok("Simple: a timed test in the test screen", (await screenOf(p)) === "screen-test" && await vis(p, "#timer"));
+  await p.click("#btn-quit"); await p.waitForTimeout(150); if (await vis(p, "#dialog[open]")) { await p.click("#dialog-ok"); await p.waitForTimeout(300); }
+  await navTo(p, "bar");
+  await p.locator("#bar-topics .bar-row").first().locator('[data-level="simple"]').click(); await p.waitForTimeout(500);
+  ok("Guided practice (The Bar): opens in Practice, untimed", (await screenOf(p)) === "screen-practice" && await vis(p, "#prac-run") && !(await vis(p, "#timer")));
   if (await p.locator('#prac-run [data-pr="step"]').count()) { await p.click('#prac-run [data-pr="step"]'); await p.waitForTimeout(100); }
-  ok("Simple: step hints available", (await p.locator("#prac-run .hint-steps li, #prac-run .callout li, #prac-run ol li").count()) >= 1);
+  ok("Guided practice: step hints available", (await p.locator("#prac-run .hint-steps li, #prac-run .callout li, #prac-run ol li").count()) >= 1);
   await p.close();
 
   // ── calculator: safe evaluation, deg/rad, errors, keyboard, Escape returns focus, position remembered
@@ -137,7 +141,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   // ── scratchpad: typed notes persist; Clear asks first
   await p.click("#tools-btn"); await p.click('#tools-menu [data-tool="pad"]'); await p.waitForTimeout(200);
   await p.click('#scratchpad [data-mode="type"]'); await p.fill("#scratchpad .sp-text", "vertex: h = -b/2a"); await p.waitForTimeout(700);
-  await p.reload(); await p.waitForTimeout(500); if (await vis(p, "#btn-enter")) await p.click("#btn-enter");
+  await p.reload(); await p.waitForTimeout(500); await enterIf(p);
   await p.click("#tools-btn"); await p.click('#tools-menu [data-tool="pad"]'); await p.waitForTimeout(200);
   if (!(await vis(p, "#scratchpad .sp-text"))) await p.click('#scratchpad [data-mode="type"]');
   ok("Scratchpad: typed notes survive a reload", (await p.inputValue("#scratchpad .sp-text")) === "vertex: h = -b/2a");
@@ -170,12 +174,12 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   } });
   ok("Migration: app loads with old data and no errors", (await screenOf(p)) === "screen-home" && errors.length === 0, errors.join(" | "));
   ok("Migration: a returning learner isn't shown the first-use welcome", !/Let's start/.test(await p.textContent("#screen-home")));
-  await navTo(p, "practice"); await p.click('.screen:not([hidden]) [data-tabs] [data-go="progress"]'); await p.waitForTimeout(400);
+  await navTo(p, "progress", 400);
   const ht = await p.textContent("#history-list");
   ok("Migration: old Tim's Test and Nightmare III attempts still listed", /Tim/.test(ht) && /Nightmare III/.test(ht));
   const kept = await p.evaluate(() => ({ h: JSON.parse(localStorage.getItem("campfire-prep.history.v2")).length, pr: JSON.parse(localStorage.getItem("campfire-prep.practice.v1")).length }));
   ok("Migration: history and practice evidence untouched", kept.h === 2 && kept.pr === 1, JSON.stringify(kept));
-  await navTo(p, "home"); await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-create"); await p.waitForTimeout(300);
+  await navTo(p, "home"); await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-create"); await p.waitForTimeout(300);
   ok("Migration: retired saved level opens setup on a current level", (await p.locator('#s-level [aria-checked="true"]').count()) === 1 && !(await p.locator("#s-level [data-level=classmate]").count()));
   await p.close();
 
@@ -183,7 +187,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
   p = await mk({ viewport: { width: 390, height: 844 } });
   const sw = async () => p.evaluate(() => document.documentElement.scrollWidth);
   ok("Phone: Home fits (no horizontal scroll)", (await sw()) <= 390);
-  await p.click('#mode-track [data-mode="normal"]'); await p.click("#btn-start"); await p.waitForTimeout(700);
+  await toTakeIf(p); await p.click('#mode-track [data-mode="normal"]'); await toTakeIf(p); await p.click("#btn-start"); await p.waitForTimeout(700);
   ok("Phone: test screen fits", (await sw()) <= 390);
   const ib = await p.locator("#island").boundingBox();
   ok("Phone: test island stays inside the screen", ib.x >= 0 && ib.x + ib.width <= 390);
@@ -195,7 +199,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
     let ctx = await chromium.launchPersistentContext(dir, { viewport: { width: 1280, height: 860 } });
     let q = ctx.pages()[0] || await ctx.newPage();
     await q.goto(BASE); await q.evaluate(() => { localStorage.setItem("campfire-prep.onboarding.v1", JSON.stringify({ site: "completed" })); }); await q.reload();
-    await q.click("#btn-enter"); await q.waitForTimeout(300);
+    await enterIf(q); await q.waitForTimeout(300);
     await q.click("#btn-settings"); await q.click('#set-lang [data-lang="de"]'); await q.click('#set-layout [data-layout="focus"]'); await q.click('#set-theme [data-theme-opt="dark"]'); await q.waitForTimeout(200);
     await ctx.close();
     ctx = await chromium.launchPersistentContext(dir, { viewport: { width: 1280, height: 860 } });
@@ -203,7 +207,7 @@ const screenOf = (p) => p.evaluate(() => [...document.querySelectorAll(".screen"
     await q.goto(BASE); await q.waitForTimeout(500);
     const before = { lang: await q.getAttribute("html", "lang"), layout: await q.getAttribute("html", "data-layout"), theme: await q.getAttribute("html", "data-theme") };
     ok("Browser closed and reopened: language, layout and theme are kept", before.lang === "de" && before.layout === "focus" && before.theme === "dark", JSON.stringify(before));
-    await q.click("#btn-enter"); await q.waitForTimeout(300);
+    await enterIf(q); await q.waitForTimeout(300);
     const saved = await q.evaluate(() => JSON.parse(localStorage.getItem("campfire-prep.ui.v1")));
     ok("…and entering the app doesn't overwrite them", saved.lang === "de" && saved.layout === "focus" && saved.theme === "dark", JSON.stringify(saved));
     await ctx.close();
